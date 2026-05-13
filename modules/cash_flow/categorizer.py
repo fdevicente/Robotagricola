@@ -73,7 +73,13 @@ def categorize_raw(proveedor: str, glosa: str, glosa_ii: str,
     }
 
 
-DEFAULT_CACHE_PATH = os.path.join(DROPBOX_BACKUP_PATH, "categorizer_cache.json")
+# Cache local (fuera de Dropbox para evitar locks de sync)
+_LOCAL_CACHE_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    ".cache",
+)
+os.makedirs(_LOCAL_CACHE_DIR, exist_ok=True)
+DEFAULT_CACHE_PATH = os.path.join(_LOCAL_CACHE_DIR, "categorizer_cache.json")
 CONFIANZA_REVISAR = 0.85
 
 
