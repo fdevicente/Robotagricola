@@ -181,3 +181,54 @@ def categorize_bank_movement(row: int, excel_path=None, cache_path=None) -> dict
     wb.close()
 
     return result
+
+
+def batch_categorize_history(excel_path=None, cache_path=None,
+                               limit: int | None = None,
+                               progress_cb=None) -> dict:
+    """Itera Master.Facturas, categoriza filas sin Categoria. Backup pre-batch."""
+    from infrastructure.backups import backup_master
+    excel_path = excel_path or EXCEL_PATH
+
+    try:
+        backup_master(reason="pre-batch-categorize", excel_path=excel_path)
+    except Exception as e:
+        logger.warning(f"Backup pre-batch fallo (continuo): {e}")
+
+    wb = load_workbook(excel_path, read_only=True)
+    ws = wb[SHEET_NAME]
+    pending_rows = []
+    skipped = 0
+    for r in range(2, ws.max_row + 1):
+        if ws.cell(r, 4).value is None:
+            continue
+        if ws.cell(r, COL_CATEGORIA).value:
+            skipped += 1
+            continue
+        pending_rows.append(r)
+    wb.close()
+
+    if limit is not None:
+        pending_rows = pending_rows[:limit]
+
+    report = {
+        "total_pending": len(pending_rows),
+        "processed": 0, "skipped": skipped,
+        "low_confidence": 0, "errors": 0,
+    }
+
+    for idx, row in enumerate(pending_rows, 1):
+        try:
+            result = categorize_invoice(row, excel_path=excel_path,
+                                          cache_path=cache_path)
+            report["processed"] += 1
+            if result["confianza"] < CONFIANZA_REVISAR:
+                report["low_confidence"] += 1
+        except Exception as e:
+            logger.error(f"Error fila {row}: {e}")
+            report["errors"] += 1
+        if progress_cb:
+            progress_cb(idx, len(pending_rows))
+
+    logger.info(f"Batch categorize OK: {report}")
+    return report
