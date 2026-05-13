@@ -1025,3 +1025,30 @@ def read_bank_movements_unlinked(excel_path=None) -> list[dict]:
         })
     wb.close()
     return movs
+
+
+def apply_bank_factura_link(bank_row: int, factura_row: int,
+                              nro_factura: str, fecha_pago: str,
+                              excel_path=None) -> dict:
+    """Escribe Fecha Pago en Facturas y Tipo+Factura_linkeada en Cuenta Banco.
+
+    Si Fecha Pago ya tiene valor, NO sobrescribe (fecha_pago_skipped=True).
+    """
+    excel_path = excel_path or EXCEL_PATH
+    result = {"fecha_pago_skipped": False, "linked": False}
+    wb = load_workbook(excel_path)
+
+    ws_f = wb[SHEET_NAME]
+    if ws_f.cell(factura_row, 3).value:
+        result["fecha_pago_skipped"] = True
+    else:
+        ws_f.cell(factura_row, 3, f"{fecha_pago} (Banco)")
+
+    ws_b = wb[CUENTA_BANCO_SHEET]
+    ws_b.cell(bank_row, COL_BANCO_TIPO, "factura")
+    ws_b.cell(bank_row, COL_BANCO_FACTURA_LINK, str(nro_factura))
+    result["linked"] = True
+
+    _save_wb(wb, excel_path)
+    wb.close()
+    return result
