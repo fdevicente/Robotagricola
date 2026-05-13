@@ -11,6 +11,7 @@ from config import ANTHROPIC_API_KEY, EXCEL_PATH, DROPBOX_BACKUP_PATH
 from excel_manager import (
     SHEET_NAME, _save_wb,
     COL_CATEGORIA, COL_CULTIVO, COL_CONFIANZA, COL_CATEGORIZADO_POR,
+    CUENTA_BANCO_SHEET, COL_BANCO_TIPO, COL_BANCO_CATEGORIA, COL_BANCO_CULTIVO,
 )
 from modules.cash_flow.prompt import (
     build_categorization_prompt,
@@ -124,6 +125,58 @@ def categorize_invoice(row: int, excel_path=None, cache_path=None) -> dict:
     ws.cell(row, COL_CULTIVO, result["cultivo"])
     ws.cell(row, COL_CONFIANZA, result["confianza"])
     ws.cell(row, COL_CATEGORIZADO_POR, source)
+    _save_wb(wb, excel_path)
+    wb.close()
+
+    return result
+
+
+def _read_bank_row(ws, row: int) -> dict:
+    return {
+        "fecha": str(ws.cell(row, 1).value or ""),
+        "descripcion": str(ws.cell(row, 2).value or ""),
+        "referencia": str(ws.cell(row, 3).value or ""),
+        "cargo": float(ws.cell(row, 4).value or 0),
+        "abono": float(ws.cell(row, 5).value or 0),
+    }
+
+
+def categorize_bank_movement(row: int, excel_path=None, cache_path=None) -> dict:
+    """Categoriza fila de Cuenta Banco. Abono>0 sin Cargo -> ingreso, no llama Claude."""
+    excel_path = excel_path or EXCEL_PATH
+    cache = _get_cache(cache_path)
+
+    wb = load_workbook(excel_path)
+    ws = wb[CUENTA_BANCO_SHEET]
+    data = _read_bank_row(ws, row)
+    wb.close()
+
+    if data["abono"] > 0 and data["cargo"] == 0:
+        result = {
+            "tipo": "ingreso", "categoria": "", "cultivo": "",
+            "confianza": 1.0, "razon": "abono detectado",
+        }
+    else:
+        cached = cache.get(data["descripcion"], data["referencia"])
+        if cached:
+            base = cached
+        else:
+            base = categorize_raw(
+                proveedor=data["descripcion"], glosa=data["referencia"],
+                glosa_ii="", monto=data["cargo"], fecha=data["fecha"],
+            )
+            cache.set(data["descripcion"], data["referencia"], base)
+        result = {**base, "tipo": "egreso"}
+
+    wb = load_workbook(excel_path)
+    ws = wb[CUENTA_BANCO_SHEET]
+    ws.cell(row, COL_BANCO_TIPO, result["tipo"])
+    if result["tipo"] != "ingreso":
+        cat = result["categoria"]
+        if result["confianza"] < CONFIANZA_REVISAR:
+            cat = "REVISAR"
+        ws.cell(row, COL_BANCO_CATEGORIA, cat)
+        ws.cell(row, COL_BANCO_CULTIVO, result["cultivo"])
     _save_wb(wb, excel_path)
     wb.close()
 
