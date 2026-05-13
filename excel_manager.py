@@ -131,6 +131,32 @@ def ensure_cash_flow_sheets(path=None):
     _save_wb(wb, path)
     wb.close()
 
+
+def ensure_new_columns(path=None):
+    """Agrega headers de columnas nuevas si no existen. Idempotente."""
+    path = path or EXCEL_PATH
+    wb = load_workbook(path)
+
+    # Facturas: cols Q-T
+    ws = wb[SHEET_NAME]
+    new_fact = {COL_CATEGORIA: "Categoria", COL_CULTIVO: "Cultivo",
+                COL_CONFIANZA: "Confianza", COL_CATEGORIZADO_POR: "Categorizado_por"}
+    for col, header in new_fact.items():
+        if ws.cell(1, col).value != header:
+            ws.cell(1, col, header)
+
+    # Cuenta Banco: cols G-J
+    if CUENTA_BANCO_SHEET in wb.sheetnames:
+        ws2 = wb[CUENTA_BANCO_SHEET]
+        new_banco = {COL_BANCO_TIPO: "Tipo", COL_BANCO_CATEGORIA: "Categoria",
+                     COL_BANCO_CULTIVO: "Cultivo", COL_BANCO_FACTURA_LINK: "Factura_linkeada"}
+        for col, header in new_banco.items():
+            if ws2.cell(1, col).value != header:
+                ws2.cell(1, col, header)
+
+    _save_wb(wb, path)
+    wb.close()
+
 # Columnas hoja Boletas (se mantiene para registro detallado):
 BOLETAS_HEADERS = ["Fecha", "Comercio / Proveedor", "RUT", "Detalle", "Monto Total", "Nº Boleta", "Observaciones"]
 
