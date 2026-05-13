@@ -75,3 +75,31 @@ def find_matches(bank_mov: dict, facturas_pendientes: list[dict]) -> list[dict]:
             scored.append({**f, "score": s})
     scored.sort(key=lambda x: x["score"], reverse=True)
     return scored
+
+
+STRONG_THRESHOLD = 100
+GAP_MIN = 30
+
+
+def classify_match(candidates: list[dict]) -> dict:
+    """Decide auto / ambiguo / no_match.
+
+    - auto: top score >= STRONG_THRESHOLD y gap >= GAP_MIN con el 2do
+    - ambiguo: top score >= MATCH_THRESHOLD pero no llega a auto
+    - no_match: lista vacia
+    """
+    if not candidates:
+        return {"status": "no_match"}
+
+    top = candidates[0]
+    if top["score"] < STRONG_THRESHOLD:
+        return {"status": "ambiguo", "candidates": candidates}
+
+    if len(candidates) == 1:
+        return {"status": "auto", "fila": top["fila"], "score": top["score"]}
+
+    gap = top["score"] - candidates[1]["score"]
+    if gap < GAP_MIN:
+        return {"status": "ambiguo", "candidates": candidates}
+
+    return {"status": "auto", "fila": top["fila"], "score": top["score"]}
