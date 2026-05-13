@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Agricola Santa Elisa</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --bg: #0f1923;
+            --card: #1a2735;
+            --card-hover: #223344;
+            --accent: #4ade80;
+            --accent2: #38bdf8;
+            --accent3: #f472b6;
+            --accent4: #facc15;
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+            --danger: #ef4444;
+            --border: #334155;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a4731, #1a3a2a);
+            padding: 20px 30px;
+            border-bottom: 2px solid var(--accent);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 { font-size: 24px; font-weight: 700; }
+        .header h1 span { color: var(--accent); }
+        .header .date { color: var(--muted); font-size: 14px; }
+        .tabs {
+            display: flex;
+            gap: 0;
+            background: var(--card);
+            border-bottom: 1px solid var(--border);
+            overflow-x: auto;
+        }
+        .tab {
+            padding: 12px 24px;
+            cursor: pointer;
+            color: var(--muted);
+            border-bottom: 3px solid transparent;
+            white-space: nowrap;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .tab:hover { color: var(--text); background: var(--card-hover); }
+        .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .content { padding: 20px; max-width: 1400px; margin: 0 auto; }
+        .grid { display: grid; gap: 20px; }
+        .grid-4 { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+        .grid-2 { grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); }
+        .grid-3 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid var(--border);
+            transition: all 0.2s;
+        }
+        .card.clickable { cursor: pointer; }
+        .card.clickable:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        .card h3 {
+            font-size: 13px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+        .card .value {
+            font-size: 28px;
+            font-weight: 700;
+        }
+        .card .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+        .green { color: var(--accent); }
+        .blue { color: var(--accent2); }
+        .pink { color: var(--accent3); }
+        .yellow { color: var(--accent4); }
+        .red { color: var(--danger); }
+        .chart-card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid var(--border);
+        }
+        .chart-card h3 {
+            font-size: 16px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+        .chart-container { position: relative; height: 300px; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        th {
+            text-align: left;
+            padding: 10px 12px;
+            background: rgba(255,255,255,0.05);
+            color: var(--muted);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        td {
+            padding: 10px 12px;
+            border-top: 1px solid var(--border);
+        }
+        tr:hover td { background: rgba(255,255,255,0.03); }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .badge-green { background: rgba(74,222,128,0.2); color: var(--accent); }
+        .badge-red { background: rgba(239,68,68,0.2); color: var(--danger); }
+        .badge-yellow { background: rgba(250,204,21,0.2); color: var(--accent4); }
+        .badge-blue { background: rgba(56,189,248,0.2); color: var(--accent2); }
+        .section { display: none; }
+        .section.active { display: block; }
+        .section-title { font-size: 20px; font-weight: 700; margin: 0 0 20px 0; }
+        .refresh-btn {
+            background: var(--accent);
+            color: #000;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+        }
+        .refresh-btn:hover { opacity: 0.9; }
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 40px 20px;
+            overflow-y: auto;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            width: 100%;
+            max-width: 1100px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            animation: slideIn 0.2s ease-out;
+        }
+        @keyframes slideIn { from { transform: translateY(-20px); opacity: 0; } to { transform: none; opacity: 1; } }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border);
+        }
+        .modal-header h2 { font-size: 18px; }
+        .modal-close {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--muted);
+            width: 32px; height: 32px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-close:hover { background: var(--card-hover); color: var(--text); }
+        .modal-body {
+            padding: 16px 24px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .modal-body table td, .modal-body table th { padding: 8px 10px; font-size: 13px; }
+        .modal-count { color: var(--muted); font-size: 14px; margin-left: 8px; }
+        .modal-filters { display: flex; gap: 8px; margin-bottom: 12px; }
+        .modal-filter {
+            padding: 6px 14px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--muted);
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .modal-filter:hover { background: var(--card-hover); color: var(--text); }
+        .modal-filter.active { background: var(--accent); color: #000; border-color: var(--accent); }
+        .loading { text-align: center; padding: 40px; color: var(--muted); }
+
+        @media (max-width: 768px) {
+            .grid-4 { grid-template-columns: 1fr 1fr; }
+            .grid-2, .grid-3 { grid-template-columns: 1fr; }
+            .content { padding: 12px; }
+            .modal { max-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1><span>Agricola</span> Santa Elisa</h1>
+        <div>
+            <span class="date">{{ data.fecha }}</span>
+            <button class="refresh-btn" onclick="location.reload()">Actualizar</button>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <div class="tab active" onclick="showTab('general')">General</div>
+        <div class="tab" onclick="showTab('facturas')">Facturas</div>
+        <div class="tab" onclick="showTab('cultivos')">Costos por Cultivo</div>
+        <div class="tab" onclick="showTab('exportaciones')">Exportaciones</div>
+        <div class="tab" onclick="showTab('finanzas')">Finanzas</div>
+        <div class="tab" onclick="showTab('inventario')">Inventario</div>
+        <div class="tab" onclick="showTab('personal')">Personal</div>
+        <div class="tab" onclick="showTab('tareas')">Tareas</div>
+    </div>
+
+    <div class="content">
+        <!-- GENERAL -->
+        <div id="tab-general" class="section active">
+            <div class="grid grid-4" style="margin-bottom:20px">
+                <div class="card clickable" onclick="openDetail('todas')">
+                    <h3>Total Facturas</h3>
+                    <div class="value blue">{{ data.facturas.total_facturas or 0 }}</div>
+                    <div class="sub">{{ data.facturas.pagadas or 0 }} pagadas — click para detalle</div>
+                </div>
+                <div class="card clickable" onclick="openDetail('todas')">
+                    <h3>Monto Total</h3>
+                    <div class="value green">${{ "{:,.0f}".format(data.facturas.total_monto or 0) }}</div>
+                    <div class="sub">En facturas registradas</div>
+                </div>
+                <div class="card clickable" onclick="openDetail('vencida')">
+                    <h3>Vencidas</h3>
+                    <div class="value red">{{ data.facturas.vencidas or 0 }}</div>
+                    <div class="sub">Sin pagar — click para ver</div>
+                </div>
+                <div class="card clickable" onclick="openBanco()">
+                    <h3>Saldo Banco</h3>
+                    <div class="value yellow">${{ "{:,.0f}".format(data.cuenta_banco.ultimo_saldo or 0) }}</div>
+                    <div class="sub">{{ data.cuenta_banco.n_movimientos or 0 }} mov — click para ver</div>
+                </div>
+            </div>
+            <div class="grid grid-4" style="margin-bottom:20px">
+                <div class="card clickable" onclick="showTab('finanzas')">
+                    <h3>Caja Chica</h3>
+                    <div class="value green">${{ "{:,.0f}".format(data.caja_chica.saldo or 0) }}</div>
+                    <div class="sub">Saldo disponible</div>
+                </div>
+                <div class="card clickable" onclick="showTab('inventario')">
+                    <h3>Inventario</h3>
+                    <div class="value blue">{{ (data.inventario.productos or [])|length }}</div>
+                    <div class="sub">
+                        {% if data.inventario.alertas %}
+                        <span class="red">{{ data.inventario.alertas }} alertas stock bajo</span>
+                        {% else %}Stock OK{% endif %}
+                    </div>
+                </div>
+                <div class="card clickable" onclick="showTab('personal')">
+                    <h3>Personal</h3>
+                    <div class="value pink">{{ (data.personal.personal or [])|length }}</div>
+                    <div class="sub">Trabajadores</div>
+                </div>
+                <div class="card clickable" onclick="showTab('tareas')">
+                    <h3>Tareas Pendientes</h3>
+                    <div class="value yellow">{{ data.tareas.pendientes or 0 }}</div>
+                    <div class="sub">{{ data.tareas.en_progreso or 0 }} en progreso</div>
+                </div>
+            </div>
+            <div class="grid grid-2">
+                <div class="chart-card">
+                    <h3>Gastos Mensuales</h3>
+                    <div class="chart-container"><canvas id="chartGastosMes"></canvas></div>
+                </div>
+                <div class="chart-card">
+                    <h3>Top 10 Proveedores</h3>
+                    <div class="chart-container"><canvas id="chartProveedores"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- FACTURAS -->
+        <div id="tab-facturas" class="section">
+            <h2 class="section-title">Facturas</h2>
+            <div class="grid grid-4" style="margin-bottom:20px">
+                <div class="card clickable" onclick="openDetail('todas')">
+                    <h3>Total</h3>
+                    <div class="value blue">{{ data.facturas.total_facturas or 0 }}</div>
+                    <div class="sub">Click para ver todas</div>
+                </div>
+                <div class="card clickable" onclick="openDetail('pagada')">
+                    <h3>Pagadas</h3>
+                    <div class="value green">{{ data.facturas.pagadas or 0 }}</div>
+                    <div class="sub">Click para ver</div>
+                </div>
+                <div class="card clickable" onclick="openDetail('por_pagar')">
+                    <h3>Por Pagar</h3>
+                    <div class="value yellow">{{ data.facturas.por_pagar or 0 }}</div>
+                    <div class="sub">Click para ver</div>
+                </div>
+                <div class="card clickable" onclick="openDetail('vencida')">
+                    <h3>Vencidas</h3>
+                    <div class="value red">{{ data.facturas.vencidas or 0 }}</div>
+                    <div class="sub">Click para ver</div>
+                </div>
+            </div>
+            <div class="grid grid-2">
+                <div class="chart-card">
+                    <h3>Tipos de Documento</h3>
+                    <div class="chart-container"><canvas id="chartTipoDoc"></canvas></div>
+                </div>
+                <div class="chart-card">
+                    <h3>Gastos por Mes</h3>
+                    <div class="chart-container"><canvas id="chartFacturasMes"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- COSTOS POR CULTIVO -->
+        <div id="tab-cultivos" class="section">
+            <h2 class="section-title">Costos por Tipo de Cultivo</h2>
+            <div class="grid grid-2" style="margin-bottom:20px">
+                <div class="chart-card">
+                    <h3>Distribucion de Costos (Facturas)</h3>
+                    <div class="chart-container"><canvas id="chartCultivos"></canvas></div>
+                </div>
+                <div class="chart-card">
+                    <h3>Uso de Insumos por Cultivo</h3>
+                    <div class="chart-container"><canvas id="chartAplicaciones"></canvas></div>
+                </div>
+            </div>
+            <div class="grid grid-2">
+                <div class="chart-card">
+                    <h3>Comparacion Anual</h3>
+                    <div class="chart-container"><canvas id="chartAnual"></canvas></div>
+                </div>
+                <div class="chart-card">
+                    <h3>Gastos Mensuales por Anio</h3>
+                    <div class="chart-container"><canvas id="chartAnualMes"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- EXPORTACIONES -->
+        <div id="tab-exportaciones" class="section">
+            <h2 class="section-title">Exportaciones a Espana</h2>
+            <div class="grid grid-4" style="margin-bottom:20px">
+                {% for year, res in (data.exportaciones.resumen or {}).items() %}
+                <div class="card">
+                    <h3>{{ year }}</h3>
+                    <div class="value green">US$ {{ "{:,.0f}".format(res.total_usd or 0) }}</div>
+                    <div class="sub">{{ "{:,.0f}".format(res.total_kg or 0) }} kg | {{ res.contenedores or 0 }} contenedores</div>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="grid grid-2" style="margin-bottom:20px">
+                <div class="chart-card">
+                    <h3>Comparacion Exportaciones por Anio</h3>
+                    <div class="chart-container"><canvas id="chartExportAnual"></canvas></div>
+                </div>
+                <div class="chart-card">
+                    <h3>Detalle de Exportaciones</h3>
+                    <table>
+                        <thead>
+                            <tr><th>Anio</th><th>Tipo</th><th>Archivo</th><th>Valor</th></tr>
+                        </thead>
+                        <tbody>
+                        {% for item in (data.exportaciones.detalle or [])[:15] %}
+                        <tr>
+                            <td>{{ item.year }}</td>
+                            <td><span class="badge badge-blue">{{ item.tipo }}</span></td>
+                            <td>{{ item.archivo[:40] }}</td>
+                            <td>
+                                {% if item.valor_usd %}US$ {{ "{:,.0f}".format(item.valor_usd) }}{% endif %}
+                                {% if item.cantidad_kg %}{{ "{:,.0f}".format(item.cantidad_kg) }} kg{% endif %}
+                                {% if item.contenedores %}{{ item.contenedores }} cont.{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- FINANZAS -->
+        <div id="tab-finanzas" class="section">
+            <h2 class="section-title">Finanzas</h2>
+            <div class="grid grid-3" style="margin-bottom:20px">
+                <div class="card">
+                    <h3>Cuenta Banco</h3>
+                    <div class="value yellow">${{ "{:,.0f}".format(data.cuenta_banco.ultimo_saldo or 0) }}</div>
+                    <div class="sub">Cargos: ${{ "{:,.0f}".format(data.cuenta_banco.cargos or 0) }} | Abonos: ${{ "{:,.0f}".format(data.cuenta_banco.abonos or 0) }}</div>
+                </div>
+                <div class="card">
+                    <h3>Caja Chica - Saldo</h3>
+                    <div class="value green">${{ "{:,.0f}".format(data.caja_chica.saldo or 0) }}</div>
+                    <div class="sub">Ingresos: ${{ "{:,.0f}".format(data.caja_chica.ingresos or 0) }}</div>
+                </div>
+                <div class="card">
+                    <h3>Caja Chica - Egresos</h3>
+                    <div class="value pink">${{ "{:,.0f}".format(data.caja_chica.egresos or 0) }}</div>
+                    <div class="sub">Total gastado</div>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3>Ultimos Movimientos Caja Chica</h3>
+                <table>
+                    <thead><tr><th>Fecha</th><th>Tipo</th><th>Monto</th><th>Detalle</th></tr></thead>
+                    <tbody>
+                    {% for m in (data.caja_chica.ultimos or []) %}
+                    <tr>
+                        <td>{{ m.fecha }}</td>
+                        <td><span class="badge {% if m.tipo == 'Ingreso' or m.tipo == 'Deposito' %}badge-green{% else %}badge-red{% endif %}">{{ m.tipo }}</span></td>
+                        <td>${{ "{:,.0f}".format(m.monto or 0) }}</td>
+                        <td>{{ m.detalle }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- INVENTARIO -->
+        <div id="tab-inventario" class="section">
+            <h2 class="section-title">Inventario de Insumos</h2>
+            <div class="grid grid-4" style="margin-bottom:20px">
+                <div class="card">
+                    <h3>Productos</h3>
+                    <div class="value blue">{{ (data.inventario.productos or [])|length }}</div>
+                </div>
+                <div class="card">
+                    <h3>Alertas Stock Bajo</h3>
+                    <div class="value {% if data.inventario.alertas %}red{% else %}green{% endif %}">{{ data.inventario.alertas or 0 }}</div>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3>Stock Actual</h3>
+                <table>
+                    <thead><tr><th>Producto</th><th>Categoria</th><th>Stock</th><th>Unidad</th><th>Minimo</th><th>Estado</th></tr></thead>
+                    <tbody>
+                    {% for p in (data.inventario.productos or []) %}
+                    <tr>
+                        <td>{{ p.producto }}</td>
+                        <td>{{ p.categoria }}</td>
+                        <td>{{ "{:,.1f}".format(p.stock) }}</td>
+                        <td>{{ p.unidad }}</td>
+                        <td>{{ "{:,.1f}".format(p.minimo) }}</td>
+                        <td>{% if p.alerta %}<span class="badge badge-red">Bajo</span>{% else %}<span class="badge badge-green">OK</span>{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- PERSONAL -->
+        <div id="tab-personal" class="section">
+            <h2 class="section-title">Personal y Vacaciones</h2>
+            <div class="grid grid-2" style="margin-bottom:20px">
+                <div class="chart-card">
+                    <h3>Personal</h3>
+                    <table>
+                        <thead><tr><th>Nombre</th><th>Cargo</th><th>Dias Pendientes</th><th>Dias Tomados</th><th>Ultima Vacacion</th></tr></thead>
+                        <tbody>
+                        {% for p in (data.personal.personal or []) %}
+                        <tr>
+                            <td>{{ p.nombre }}</td>
+                            <td>{{ p.cargo }}</td>
+                            <td>
+                                {% if p.dias_pendientes > 15 %}
+                                <span class="yellow">{{ "{:.1f}".format(p.dias_pendientes) }}</span>
+                                {% else %}
+                                {{ "{:.1f}".format(p.dias_pendientes) }}
+                                {% endif %}
+                            </td>
+                            <td>{{ "{:.0f}".format(p.dias_tomados) }}</td>
+                            <td>{{ p.ultima_vacacion or '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="chart-card">
+                    <h3>Dias Pendientes por Trabajador</h3>
+                    <div class="chart-container"><canvas id="chartVacaciones"></canvas></div>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3>Ultimas Vacaciones Registradas</h3>
+                <table>
+                    <thead><tr><th>Trabajador</th><th>Inicio</th><th>Fin</th><th>Dias</th><th>Estado</th></tr></thead>
+                    <tbody>
+                    {% for v in (data.personal.vacaciones or []) %}
+                    <tr>
+                        <td>{{ v.trabajador }}</td>
+                        <td>{{ v.inicio }}</td>
+                        <td>{{ v.fin }}</td>
+                        <td>{{ v.dias }}</td>
+                        <td><span class="badge badge-green">{{ v.estado }}</span></td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAREAS -->
+        <div id="tab-tareas" class="section">
+            <h2 class="section-title">Tareas y Bitacora</h2>
+            <div class="grid grid-3" style="margin-bottom:20px">
+                <div class="card">
+                    <h3>Pendientes</h3>
+                    <div class="value yellow">{{ data.tareas.pendientes or 0 }}</div>
+                </div>
+                <div class="card">
+                    <h3>En Progreso</h3>
+                    <div class="value blue">{{ data.tareas.en_progreso or 0 }}</div>
+                </div>
+                <div class="card">
+                    <h3>Completadas</h3>
+                    <div class="value green">{{ data.tareas.completadas or 0 }}</div>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3>Tareas</h3>
+                <table>
+                    <thead><tr><th>ID</th><th>Descripcion</th><th>Prioridad</th><th>Estado</th><th>Responsable</th></tr></thead>
+                    <tbody>
+                    {% for t in (data.tareas.tareas or []) %}
+                    <tr>
+                        <td>#{{ t.id }}</td>
+                        <td>{{ t.descripcion }}</td>
+                        <td>
+                            <span class="badge {% if t.prioridad == 'Alta' %}badge-red{% elif t.prioridad == 'Media' %}badge-yellow{% else %}badge-blue{% endif %}">
+                                {{ t.prioridad }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge {% if t.estado == 'Hecho' %}badge-green{% elif t.estado == 'En Progreso' %}badge-blue{% else %}badge-yellow{% endif %}">
+                                {{ t.estado }}
+                            </span>
+                        </td>
+                        <td>{{ t.responsable or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de detalle -->
+    <div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal()">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="modalTitle">Detalle</h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <div class="loading">Cargando...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // Tab navigation
+    function showTab(name) {
+        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.getElementById('tab-' + name).classList.add('active');
+        // Find matching tab button
+        document.querySelectorAll('.tab').forEach(t => {
+            if (t.textContent.trim().toLowerCase().replace(/ /g,'') === name.replace(/ /g,''))
+                t.classList.add('active');
+        });
+    }
+
+    // Chart defaults
+    Chart.defaults.color = '#94a3b8';
+    Chart.defaults.borderColor = '#334155';
+    Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+
+    const COLORS = ['#4ade80', '#38bdf8', '#f472b6', '#facc15', '#a78bfa', '#fb923c', '#2dd4bf', '#e879f9', '#34d399', '#60a5fa'];
+
+    // Data from server
+    const data = {{ data | tojson }};
+
+    // 1. Gastos mensuales
+    const porMes = data.facturas.por_mes || {};
+    new Chart(document.getElementById('chartGastosMes'), {
+        type: 'bar',
+        data: {
+            labels: Object.keys(porMes),
+            datasets: [{
+                label: 'Gasto ($)',
+                data: Object.values(porMes),
+                backgroundColor: '#4ade8080',
+                borderColor: '#4ade80',
+                borderWidth: 1,
+                borderRadius: 4,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { ticks: { callback: v => '$' + (v/1000000).toFixed(1) + 'M' } }
+            }
+        }
+    });
+
+    // 2. Top proveedores
+    const provs = (data.facturas.top_proveedores || []);
+    new Chart(document.getElementById('chartProveedores'), {
+        type: 'bar',
+        data: {
+            labels: provs.map(p => p.nombre.substring(0, 20)),
+            datasets: [{
+                label: 'Monto ($)',
+                data: provs.map(p => p.monto),
+                backgroundColor: COLORS.map(c => c + '80'),
+                borderColor: COLORS,
+                borderWidth: 1,
+                borderRadius: 4,
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { ticks: { callback: v => '$' + (v/1000000).toFixed(1) + 'M' } }
+            }
+        }
+    });
+
+    // 3. Tipo de documento
+    const tipoDoc = data.facturas.por_tipo_doc || {};
+    new Chart(document.getElementById('chartTipoDoc'), {
+        type: 'doughnut',
+        data: {
+            labels: Object.keys(tipoDoc),
+            datasets: [{
+                data: Object.values(tipoDoc),
+                backgroundColor: COLORS,
+                borderWidth: 0,
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+    });
+
+    // 4. Facturas por mes (line)
+    new Chart(document.getElementById('chartFacturasMes'), {
+        type: 'line',
+        data: {
+            labels: Object.keys(porMes),
+            datasets: [{
+                label: 'Gasto ($)',
+                data: Object.values(porMes),
+                borderColor: '#38bdf8',
+                backgroundColor: '#38bdf820',
+                fill: true,
+                tension: 0.3,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+        }
+    });
+
+    // 5. Costos por cultivo
+    const costCult = data.costos_cultivo.facturas || {};
+    new Chart(document.getElementById('chartCultivos'), {
+        type: 'doughnut',
+        data: {
+            labels: Object.keys(costCult),
+            datasets: [{
+                data: Object.values(costCult),
+                backgroundColor: ['#4ade80', '#f472b6', '#facc15', '#94a3b8'],
+                borderWidth: 0,
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+    });
+
+    // 6. Aplicaciones por cultivo
+    const appCult = data.costos_cultivo.aplicaciones || {};
+    new Chart(document.getElementById('chartAplicaciones'), {
+        type: 'bar',
+        data: {
+            labels: Object.keys(appCult),
+            datasets: [{
+                label: 'Uso estimado ($)',
+                data: Object.values(appCult),
+                backgroundColor: ['#4ade8080', '#f472b680', '#facc1580', '#94a3b880'],
+                borderColor: ['#4ade80', '#f472b6', '#facc15', '#94a3b8'],
+                borderWidth: 1,
+                borderRadius: 4,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } }
+        }
+    });
+
+    // 7. Comparacion anual
+    const anual = data.comparacion_anual || {};
+    const anualYears = Object.keys(anual);
+    new Chart(document.getElementById('chartAnual'), {
+        type: 'bar',
+        data: {
+            labels: anualYears,
+            datasets: [{
+                label: 'Gasto Total ($)',
+                data: anualYears.map(y => anual[y].total),
+                backgroundColor: COLORS.map(c => c + '80'),
+                borderColor: COLORS,
+                borderWidth: 1,
+                borderRadius: 4,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { ticks: { callback: v => '$' + (v/1000000).toFixed(1) + 'M' } }
+            }
+        }
+    });
+
+    // 8. Gastos mensuales por anio (line multi)
+    const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    const anualDS = anualYears.map((y, i) => ({
+        label: y,
+        data: anual[y].meses,
+        borderColor: COLORS[i % COLORS.length],
+        tension: 0.3,
+        fill: false,
+    }));
+    new Chart(document.getElementById('chartAnualMes'), {
+        type: 'line',
+        data: { labels: meses, datasets: anualDS },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { ticks: { callback: v => '$' + (v/1000000).toFixed(1) + 'M' } }
+            }
+        }
+    });
+
+    // 9. Exportaciones por anio
+    const expRes = data.exportaciones.resumen || {};
+    const expYears = Object.keys(expRes);
+    new Chart(document.getElementById('chartExportAnual'), {
+        type: 'bar',
+        data: {
+            labels: expYears,
+            datasets: [
+                {
+                    label: 'USD',
+                    data: expYears.map(y => expRes[y].total_usd),
+                    backgroundColor: '#4ade8080',
+                    borderColor: '#4ade80',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    yAxisID: 'y',
+                },
+                {
+                    label: 'Kg',
+                    data: expYears.map(y => expRes[y].total_kg),
+                    backgroundColor: '#38bdf880',
+                    borderColor: '#38bdf8',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    yAxisID: 'y1',
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { position: 'left', ticks: { callback: v => 'US$' + (v/1000).toFixed(0) + 'k' } },
+                y1: { position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: v => (v/1000).toFixed(0) + 't' } }
+            }
+        }
+    });
+
+    // 10. Vacaciones pendientes
+    const pers = (data.personal.personal || []);
+    if (pers.length > 0) {
+        new Chart(document.getElementById('chartVacaciones'), {
+            type: 'bar',
+            data: {
+                labels: pers.map(p => p.nombre.split(' ')[0]),
+                datasets: [{
+                    label: 'Dias pendientes',
+                    data: pers.map(p => p.dias_pendientes),
+                    backgroundColor: '#a78bfa80',
+                    borderColor: '#a78bfa',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+
+    // ── Modal functions ──
+    function openModal(title) {
+        document.getElementById('modalTitle').textContent = title;
+        document.getElementById('modalBody').innerHTML = '<div class="loading">Cargando datos...</div>';
+        document.getElementById('modalOverlay').classList.add('open');
+        document.body.style.overflow = 'hidden';
+    }
+    function closeModal() {
+        document.getElementById('modalOverlay').classList.remove('open');
+        document.body.style.overflow = '';
+    }
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+    function fmt(n) { return '$' + Number(n||0).toLocaleString('es-CL', {maximumFractionDigits:0}); }
+
+    const FILTRO_LABELS = {
+        'todas': 'Todas', 'vencida': 'Vencidas', 'por_pagar': 'Por Pagar', 'pagada': 'Pagadas'
+    };
+
+    function openDetail(filtro) {
+        openModal('Facturas — ' + FILTRO_LABELS[filtro]);
+        fetch('/api/facturas/detalle?filtro=' + filtro)
+        .then(r => r.json())
+        .then(rows => {
+            let html = '<div class="modal-filters">';
+            ['todas','vencida','por_pagar','pagada'].forEach(f => {
+                html += `<button class="modal-filter ${f===filtro?'active':''}" onclick="openDetail('${f}')">${FILTRO_LABELS[f]}</button>`;
+            });
+            html += '</div>';
+            html += `<div style="color:var(--muted);margin-bottom:12px;font-size:13px">${rows.length} facturas</div>`;
+            html += '<table><thead><tr>';
+            html += '<th>Proveedor</th><th>RUT</th><th>Documento</th><th>N</th><th>Glosa</th>';
+            html += '<th>Emision</th><th>Vence</th><th>Monto</th><th>Estado</th>';
+            html += '</tr></thead><tbody>';
+            rows.forEach(r => {
+                const badge = r.estado === 'vencida' ? 'badge-red' :
+                              r.estado === 'pagada' ? 'badge-green' : 'badge-yellow';
+                const dias = r.dias_vencida > 0 ? ` (${r.dias_vencida}d)` : '';
+                html += `<tr>`;
+                html += `<td>${r.proveedor}</td>`;
+                html += `<td>${r.rut}</td>`;
+                html += `<td>${r.documento}</td>`;
+                html += `<td>${r.nro}</td>`;
+                html += `<td>${r.glosa}</td>`;
+                html += `<td>${r.fecha_emision}</td>`;
+                html += `<td>${r.fecha_venc}</td>`;
+                html += `<td style="text-align:right;white-space:nowrap">${fmt(r.monto)}</td>`;
+                html += `<td><span class="badge ${badge}">${r.estado}${dias}</span></td>`;
+                html += `</tr>`;
+            });
+            html += '</tbody></table>';
+            // Total
+            const total = rows.reduce((s,r) => s + (r.monto||0), 0);
+            html += `<div style="text-align:right;margin-top:12px;font-size:15px;font-weight:700">Total: ${fmt(total)}</div>`;
+            document.getElementById('modalBody').innerHTML = html;
+        })
+        .catch(e => {
+            document.getElementById('modalBody').innerHTML = '<div class="loading red">Error: ' + e.message + '</div>';
+        });
+    }
+
+    function openBanco() {
+        openModal('Movimientos Cuenta Banco');
+        fetch('/api/banco/movimientos')
+        .then(r => r.json())
+        .then(rows => {
+            let html = `<div style="color:var(--muted);margin-bottom:12px;font-size:13px">${rows.length} movimientos</div>`;
+            html += '<table><thead><tr>';
+            html += '<th>Fecha</th><th>Descripcion</th><th>Referencia</th><th>Cargo</th><th>Abono</th><th>Saldo</th>';
+            html += '</tr></thead><tbody>';
+            rows.forEach(r => {
+                html += `<tr>`;
+                html += `<td>${r.fecha}</td>`;
+                html += `<td>${r.descripcion}</td>`;
+                html += `<td>${r.referencia}</td>`;
+                html += `<td style="text-align:right">${r.cargo ? fmt(r.cargo) : ''}</td>`;
+                html += `<td style="text-align:right">${r.abono ? fmt(r.abono) : ''}</td>`;
+                html += `<td style="text-align:right;font-weight:600">${fmt(r.saldo)}</td>`;
+                html += `</tr>`;
+            });
+            html += '</tbody></table>';
+            document.getElementById('modalBody').innerHTML = html;
+        })
+        .catch(e => {
+            document.getElementById('modalBody').innerHTML = '<div class="loading red">Error: ' + e.message + '</div>';
+        });
+    }
+    </script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+*.pyo
+*.log
+.pytest_cache/
+.env
+venv/
+env/
+*.xlsx
+!tests/fixtures/*.xlsx
+bot.log
+reparacion_log.txt
+progreso_reparacion.*
+Facturas Recibidas por Telegram/
+Boletas Recibidas por Telegram/
+Guias Recibidas por Telegram/
+files/
+'$'/

@@ -1,0 +1,7 @@
+pyTelegramBotAPI
+google-generativeai
+pandas
+openpyxl
+schedule
+openai
+pymupdf

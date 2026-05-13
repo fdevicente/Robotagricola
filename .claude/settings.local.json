@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python test_api.py)",
+      "Bash(python -c \":*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(python -m py_compile src/dashboard_data.py)",
+      "Bash(python -m py_compile src/dashboard.py)"
+    ]
+  }
+}
