@@ -972,3 +972,56 @@ def reporte_mensual(mes: int = None, anio: int = None) -> dict:
         "total_caja_mes": total_caja_mes,
         "n_gastos_caja": n_gastos_caja,
     }
+
+
+def read_facturas_pendientes(excel_path=None) -> list[dict]:
+    """Lee Master.Facturas, devuelve facturas con Fecha Pago vacia."""
+    excel_path = excel_path or EXCEL_PATH
+    wb = load_workbook(excel_path, read_only=True, data_only=True)
+    ws = wb[SHEET_NAME]
+    pendientes = []
+    for r in range(2, ws.max_row + 1):
+        proveedor = ws.cell(r, 4).value
+        if not proveedor:
+            continue
+        if ws.cell(r, 3).value:
+            continue
+        pendientes.append({
+            "fila": r,
+            "fecha_emision": ws.cell(r, 1).value,
+            "fecha_vencimiento": ws.cell(r, 2).value,
+            "proveedor": proveedor,
+            "rut": ws.cell(r, 5).value,
+            "nro_factura": ws.cell(r, 7).value,
+            "glosa": ws.cell(r, 8).value,
+            "total": ws.cell(r, 15).value,
+        })
+    wb.close()
+    return pendientes
+
+
+def read_bank_movements_unlinked(excel_path=None) -> list[dict]:
+    """Lee Cuenta Banco, devuelve cargos sin Factura_linkeada."""
+    excel_path = excel_path or EXCEL_PATH
+    wb = load_workbook(excel_path, read_only=True, data_only=True)
+    ws = wb[CUENTA_BANCO_SHEET]
+    movs = []
+    for r in range(2, ws.max_row + 1):
+        fecha = ws.cell(r, 1).value
+        if not fecha:
+            continue
+        cargo = float(ws.cell(r, 4).value or 0)
+        if cargo <= 0:
+            continue
+        if ws.cell(r, COL_BANCO_FACTURA_LINK).value:
+            continue
+        movs.append({
+            "fila": r,
+            "fecha": fecha,
+            "descripcion": ws.cell(r, 2).value or "",
+            "referencia": ws.cell(r, 3).value or "",
+            "cargo": cargo,
+            "abono": float(ws.cell(r, 5).value or 0),
+        })
+    wb.close()
+    return movs
