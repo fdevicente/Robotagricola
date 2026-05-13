@@ -80,6 +80,57 @@ CATEGORIAS = [
 
 CULTIVOS = ["NOGALES", "CEREZOS", "AVELLANOS", "GENERAL"]
 
+
+def _ensure_sheet_with_headers(wb, name, headers):
+    """Crea hoja con headers si no existe."""
+    if name not in wb.sheetnames:
+        ws = wb.create_sheet(name)
+        ws.append(headers)
+
+
+def ensure_cash_flow_sheets(path=None):
+    """Crea hojas nuevas en Master si no existen. Idempotente."""
+    from config import CASH_FLOW_CONFIG
+    path = path or EXCEL_PATH
+    wb = load_workbook(path)
+
+    _ensure_sheet_with_headers(wb, COSECHAS_SHEET, [
+        "Año", "Cultivo", "Kg total", "Exportadora", "Kg asignados",
+        "Precio USD/kg", "N° cuotas", "Cuota #", "Fecha estimada",
+        "Monto USD estimado", "Tipo cuota", "Estado",
+        "Fecha real recibido", "Monto real recibido", "Moneda recibida", "Notas"
+    ])
+
+    _ensure_sheet_with_headers(wb, GUIAS_SHEET, [
+        "Fecha", "N° Guía", "Cultivo", "Kg", "Exportadora destino",
+        "Camión / Conductor", "Sector / Equipo", "Año cosecha",
+        "Origen", "PDF_path", "Notas"
+    ])
+
+    _ensure_sheet_with_headers(wb, AJUSTES_SHEET, [
+        "Fecha agregado", "Mes proyectado", "Categoria",
+        "Cultivo", "Monto", "Razón", "Activo"
+    ])
+
+    if CONFIG_SHEET not in wb.sheetnames:
+        ws = wb.create_sheet(CONFIG_SHEET)
+        ws.append(["Parámetro", "Valor"])
+        for k, v in CASH_FLOW_CONFIG.items():
+            ws.append([k, v])
+
+    if HECTAREAS_SHEET not in wb.sheetnames:
+        ws = wb.create_sheet(HECTAREAS_SHEET)
+        ws.append(["Año", "Nogales", "Cerezos", "Avellanos", "Notas"])
+        ws.append([2024, 65, 1.8, 0, "Sin avellanos"])
+        ws.append([2025, 54, 3.8, 11.5, "Inicio replante avellanos"])
+        ws.append([2026, 43, 3.8, 26.5, "+15 hc avellanos"])
+
+    if FLUJO_CAJA_SHEET not in wb.sheetnames:
+        wb.create_sheet(FLUJO_CAJA_SHEET)
+
+    _save_wb(wb, path)
+    wb.close()
+
 # Columnas hoja Boletas (se mantiene para registro detallado):
 BOLETAS_HEADERS = ["Fecha", "Comercio / Proveedor", "RUT", "Detalle", "Monto Total", "Nº Boleta", "Observaciones"]
 
