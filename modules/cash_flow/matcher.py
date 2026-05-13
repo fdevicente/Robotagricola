@@ -61,3 +61,17 @@ def match_score(factura: dict, bank_mov: dict) -> float:
         score += 50
 
     return score
+
+
+MATCH_THRESHOLD = 30
+
+
+def find_matches(bank_mov: dict, facturas_pendientes: list[dict]) -> list[dict]:
+    """Devuelve candidatos sobre threshold, ordenados por score desc."""
+    scored = []
+    for f in facturas_pendientes:
+        s = match_score(f, bank_mov)
+        if s >= MATCH_THRESHOLD:
+            scored.append({**f, "score": s})
+    scored.sort(key=lambda x: x["score"], reverse=True)
+    return scored
