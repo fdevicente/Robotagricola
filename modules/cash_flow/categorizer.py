@@ -92,15 +92,12 @@ def _read_invoice_row(ws, row: int) -> dict:
     }
 
 
-def categorize_invoice(row: int, excel_path=None, cache_path=None) -> dict:
-    """Categoriza la fila `row` de Facturas y escribe cols Q-T en el Master."""
-    excel_path = excel_path or EXCEL_PATH
-    cache = _get_cache(cache_path)
+def _categorize_invoice_in_ws(ws, row: int, cache) -> dict:
+    """Lee la fila `row`, categoriza, ESCRIBE en `ws` en memoria. No guarda.
 
-    wb = load_workbook(excel_path)
-    ws = wb[SHEET_NAME]
+    Usado por categorize_invoice (single-row) y batch_categorize_history (bulk).
+    """
     data = _read_invoice_row(ws, row)
-    wb.close()
 
     cached = cache.get(data["proveedor"], data["glosa"])
     if cached:
@@ -119,12 +116,22 @@ def categorize_invoice(row: int, excel_path=None, cache_path=None) -> dict:
     if result["confianza"] < CONFIANZA_REVISAR:
         cat_to_write = "REVISAR"
 
-    wb = load_workbook(excel_path)
-    ws = wb[SHEET_NAME]
     ws.cell(row, COL_CATEGORIA, cat_to_write)
     ws.cell(row, COL_CULTIVO, result["cultivo"])
     ws.cell(row, COL_CONFIANZA, result["confianza"])
     ws.cell(row, COL_CATEGORIZADO_POR, source)
+
+    return result
+
+
+def categorize_invoice(row: int, excel_path=None, cache_path=None) -> dict:
+    """Categoriza la fila `row` de Facturas y escribe cols Q-T en el Master."""
+    excel_path = excel_path or EXCEL_PATH
+    cache = _get_cache(cache_path)
+
+    wb = load_workbook(excel_path)
+    ws = wb[SHEET_NAME]
+    result = _categorize_invoice_in_ws(ws, row, cache)
     _save_wb(wb, excel_path)
     wb.close()
 
@@ -183,10 +190,18 @@ def categorize_bank_movement(row: int, excel_path=None, cache_path=None) -> dict
     return result
 
 
+SAVE_EVERY = 25  # filas entre cada guardado del Master
+
+
 def batch_categorize_history(excel_path=None, cache_path=None,
                                limit: int | None = None,
-                               progress_cb=None) -> dict:
-    """Itera Master.Facturas, categoriza filas sin Categoria. Backup pre-batch."""
+                               progress_cb=None,
+                               save_every: int = SAVE_EVERY) -> dict:
+    """Itera Master.Facturas, categoriza filas sin Categoria.
+
+    Optimizado: abre Master una sola vez, guarda cada `save_every` filas.
+    Backup pre-batch automatico.
+    """
     from infrastructure.backups import backup_master
     excel_path = excel_path or EXCEL_PATH
 
@@ -195,8 +210,11 @@ def batch_categorize_history(excel_path=None, cache_path=None,
     except Exception as e:
         logger.warning(f"Backup pre-batch fallo (continuo): {e}")
 
-    wb = load_workbook(excel_path, read_only=True)
+    cache = _get_cache(cache_path)
+
+    wb = load_workbook(excel_path)
     ws = wb[SHEET_NAME]
+
     pending_rows = []
     skipped = 0
     for r in range(2, ws.max_row + 1):
@@ -206,7 +224,6 @@ def batch_categorize_history(excel_path=None, cache_path=None,
             skipped += 1
             continue
         pending_rows.append(r)
-    wb.close()
 
     if limit is not None:
         pending_rows = pending_rows[:limit]
@@ -217,18 +234,30 @@ def batch_categorize_history(excel_path=None, cache_path=None,
         "low_confidence": 0, "errors": 0,
     }
 
+    since_last_save = 0
     for idx, row in enumerate(pending_rows, 1):
         try:
-            result = categorize_invoice(row, excel_path=excel_path,
-                                          cache_path=cache_path)
+            result = _categorize_invoice_in_ws(ws, row, cache)
             report["processed"] += 1
             if result["confianza"] < CONFIANZA_REVISAR:
                 report["low_confidence"] += 1
+            since_last_save += 1
         except Exception as e:
             logger.error(f"Error fila {row}: {e}")
             report["errors"] += 1
+
+        if since_last_save >= save_every:
+            _save_wb(wb, excel_path)
+            since_last_save = 0
+            logger.info(f"Checkpoint guardado: {idx}/{len(pending_rows)}")
+
         if progress_cb:
             progress_cb(idx, len(pending_rows))
+
+    # Guardado final
+    if since_last_save > 0:
+        _save_wb(wb, excel_path)
+    wb.close()
 
     logger.info(f"Batch categorize OK: {report}")
     return report
