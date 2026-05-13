@@ -3,13 +3,20 @@
 Usa requests directo (mismo patron que processors/extractor.py).
 """
 import logging
+import os
 import requests
+from openpyxl import load_workbook
 
-from config import ANTHROPIC_API_KEY
+from config import ANTHROPIC_API_KEY, EXCEL_PATH, DROPBOX_BACKUP_PATH
+from excel_manager import (
+    SHEET_NAME, _save_wb,
+    COL_CATEGORIA, COL_CULTIVO, COL_CONFIANZA, COL_CATEGORIZADO_POR,
+)
 from modules.cash_flow.prompt import (
     build_categorization_prompt,
     parse_categorization_response,
 )
+from modules.cash_flow.categorizer_cache import CategorizerCache
 
 logger = logging.getLogger(__name__)
 
@@ -63,3 +70,61 @@ def categorize_raw(proveedor: str, glosa: str, glosa_ii: str,
         "confianza": 0.0,
         "razon": "Claude API fallo",
     }
+
+
+DEFAULT_CACHE_PATH = os.path.join(DROPBOX_BACKUP_PATH, "categorizer_cache.json")
+CONFIANZA_REVISAR = 0.85
+
+
+def _get_cache(cache_path=None) -> CategorizerCache:
+    return CategorizerCache(cache_path or DEFAULT_CACHE_PATH)
+
+
+def _read_invoice_row(ws, row: int) -> dict:
+    return {
+        "fecha": str(ws.cell(row, 1).value or ""),
+        "proveedor": str(ws.cell(row, 4).value or ""),
+        "documento": str(ws.cell(row, 6).value or ""),
+        "glosa": str(ws.cell(row, 8).value or ""),
+        "glosa_ii": str(ws.cell(row, 9).value or ""),
+        "monto": float(ws.cell(row, 15).value or 0),
+    }
+
+
+def categorize_invoice(row: int, excel_path=None, cache_path=None) -> dict:
+    """Categoriza la fila `row` de Facturas y escribe cols Q-T en el Master."""
+    excel_path = excel_path or EXCEL_PATH
+    cache = _get_cache(cache_path)
+
+    wb = load_workbook(excel_path)
+    ws = wb[SHEET_NAME]
+    data = _read_invoice_row(ws, row)
+    wb.close()
+
+    cached = cache.get(data["proveedor"], data["glosa"])
+    if cached:
+        result = cached
+        source = "cache"
+    else:
+        result = categorize_raw(
+            proveedor=data["proveedor"], glosa=data["glosa"],
+            glosa_ii=data["glosa_ii"], monto=data["monto"],
+            fecha=data["fecha"],
+        )
+        cache.set(data["proveedor"], data["glosa"], result)
+        source = "claude"
+
+    cat_to_write = result["categoria"]
+    if result["confianza"] < CONFIANZA_REVISAR:
+        cat_to_write = "REVISAR"
+
+    wb = load_workbook(excel_path)
+    ws = wb[SHEET_NAME]
+    ws.cell(row, COL_CATEGORIA, cat_to_write)
+    ws.cell(row, COL_CULTIVO, result["cultivo"])
+    ws.cell(row, COL_CONFIANZA, result["confianza"])
+    ws.cell(row, COL_CATEGORIZADO_POR, source)
+    _save_wb(wb, excel_path)
+    wb.close()
+
+    return result
