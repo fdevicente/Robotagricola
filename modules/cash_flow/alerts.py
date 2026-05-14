@@ -48,3 +48,36 @@ def detect_factura_por_vencer(facturas: list, hoy=None, dias: int = 3) -> list:
                 ),
             })
     return alertas
+
+
+import json
+import os
+
+
+class AlertDedupe:
+    """Recuerda que alertas ya se enviaron por (tipo, periodo)."""
+
+    def __init__(self, path: str):
+        self.path = path
+        self._data = self._load()
+
+    def _load(self) -> dict:
+        if not os.path.exists(self.path):
+            return {}
+        try:
+            with open(self.path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return {}
+
+    def _save(self):
+        os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
+        with open(self.path, "w", encoding="utf-8") as f:
+            json.dump(self._data, f)
+
+    def should_fire(self, tipo: str, periodo: str) -> bool:
+        return self._data.get(f"{tipo}|{periodo}") is None
+
+    def mark_fired(self, tipo: str, periodo: str):
+        self._data[f"{tipo}|{periodo}"] = True
+        self._save()
