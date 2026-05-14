@@ -103,3 +103,68 @@ def classify_match(candidates: list[dict]) -> dict:
         return {"status": "ambiguo", "candidates": candidates}
 
     return {"status": "auto", "fila": top["fila"], "score": top["score"]}
+
+
+def match_new_bank_movements(excel_path=None, limit: int | None = None) -> dict:
+    """Lee movimientos unlinked, busca matches, aplica auto-matches.
+
+    Optimizado: abre Master 1 vez, escribe en memoria, guarda al final.
+    Devuelve: {scanned, auto_matched, ambiguous, no_match, errors}
+    """
+    from openpyxl import load_workbook
+    from config import EXCEL_PATH
+    from excel_manager import (
+        SHEET_NAME, CUENTA_BANCO_SHEET, _save_wb,
+        COL_BANCO_TIPO, COL_BANCO_FACTURA_LINK,
+        read_facturas_pendientes, read_bank_movements_unlinked,
+    )
+    excel_path = excel_path or EXCEL_PATH
+
+    movs = read_bank_movements_unlinked(excel_path)
+    pendientes = read_facturas_pendientes(excel_path)
+    if limit is not None:
+        movs = movs[:limit]
+
+    report = {
+        "scanned": len(movs), "auto_matched": 0,
+        "ambiguous": 0, "no_match": 0, "errors": 0,
+    }
+
+    wb = load_workbook(excel_path)
+    ws_f = wb[SHEET_NAME]
+    ws_b = wb[CUENTA_BANCO_SHEET]
+    dirty = False
+
+    for mov in movs:
+        try:
+            candidates = find_matches(mov, pendientes)
+            decision = classify_match(candidates)
+            if decision["status"] == "auto":
+                fila = decision["fila"]
+                factura = next((f for f in pendientes if f["fila"] == fila), None)
+                if not factura:
+                    report["errors"] += 1
+                    continue
+                fecha = mov["fecha"]
+                fecha_str = (fecha.strftime("%Y-%m-%d")
+                              if hasattr(fecha, "strftime") else str(fecha)[:10])
+                # Write in-memory
+                if not ws_f.cell(fila, 3).value:
+                    ws_f.cell(fila, 3, f"{fecha_str} (Banco)")
+                ws_b.cell(mov["fila"], COL_BANCO_TIPO, "factura")
+                ws_b.cell(mov["fila"], COL_BANCO_FACTURA_LINK,
+                          str(factura.get("nro_factura") or ""))
+                dirty = True
+                pendientes = [f for f in pendientes if f["fila"] != fila]
+                report["auto_matched"] += 1
+            elif decision["status"] in ("ambiguous", "ambiguo"):
+                report["ambiguous"] += 1
+            else:
+                report["no_match"] += 1
+        except Exception:
+            report["errors"] += 1
+
+    if dirty:
+        _save_wb(wb, excel_path)
+    wb.close()
+    return report

@@ -974,8 +974,26 @@ def reporte_mensual(mes: int = None, anio: int = None) -> dict:
     }
 
 
+def _coerce_date(v):
+    """Convierte valor de celda a date una sola vez."""
+    if isinstance(v, datetime):
+        return v.date()
+    if isinstance(v, date):
+        return v
+    if isinstance(v, str):
+        for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+            try:
+                return datetime.strptime(v[:10], fmt).date()
+            except ValueError:
+                pass
+    return None
+
+
 def read_facturas_pendientes(excel_path=None) -> list[dict]:
-    """Lee Master.Facturas, devuelve facturas con Fecha Pago vacia."""
+    """Lee Master.Facturas, devuelve facturas con Fecha Pago vacia.
+
+    fecha_emision se devuelve como date (no string) para evitar reparsing.
+    """
     excel_path = excel_path or EXCEL_PATH
     wb = load_workbook(excel_path, read_only=True, data_only=True)
     ws = wb[SHEET_NAME]
@@ -988,8 +1006,8 @@ def read_facturas_pendientes(excel_path=None) -> list[dict]:
             continue
         pendientes.append({
             "fila": r,
-            "fecha_emision": ws.cell(r, 1).value,
-            "fecha_vencimiento": ws.cell(r, 2).value,
+            "fecha_emision": _coerce_date(ws.cell(r, 1).value),
+            "fecha_vencimiento": _coerce_date(ws.cell(r, 2).value),
             "proveedor": proveedor,
             "rut": ws.cell(r, 5).value,
             "nro_factura": ws.cell(r, 7).value,
@@ -1017,7 +1035,7 @@ def read_bank_movements_unlinked(excel_path=None) -> list[dict]:
             continue
         movs.append({
             "fila": r,
-            "fecha": fecha,
+            "fecha": _coerce_date(fecha) or fecha,
             "descripcion": ws.cell(r, 2).value or "",
             "referencia": ws.cell(r, 3).value or "",
             "cargo": cargo,
