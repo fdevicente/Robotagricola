@@ -189,3 +189,25 @@ def compute_factor_hc(hc: dict, cultivo: str, base_year: int, target_year: int) 
     if base <= 0:
         return 1.0
     return target / base
+
+
+def compute_egresos_proyectados(historicos: dict, ajustes: list,
+                                  hc: dict, base_year: int,
+                                  target_year: int) -> dict:
+    """Proyecta egresos del target_year escalando base_year + sumando ajustes."""
+    proj: dict = defaultdict(float)
+
+    for (y, m, cat, cul), monto in historicos.items():
+        if y != base_year:
+            continue
+        factor = compute_factor_hc(hc, cul, base_year, target_year)
+        proj[(target_year, m, cat, cul)] += monto * factor
+
+    for a in ajustes:
+        ym = a["mes_proyectado"]
+        if ym[0] != target_year:
+            continue
+        key = (target_year, ym[1], a["categoria"], a["cultivo"])
+        proj[key] += a["monto"]
+
+    return dict(proj)
