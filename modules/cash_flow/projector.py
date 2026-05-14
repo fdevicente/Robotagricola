@@ -238,3 +238,65 @@ def compute_saldo_mensual(saldo_inicial: float, ingresos: list,
         }
         saldo = saldo_cierre
     return result
+
+
+_MESES_ES = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+              "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+
+
+def _month_label(year: int, month: int) -> str:
+    return f"{_MESES_ES[month]}-{str(year)[-2:]}"
+
+
+def write_flujo_caja(saldo_data: dict, egresos: dict, ingresos: list,
+                       months: list, excel_path: str | None = None):
+    """Regenera la hoja Flujo Caja con la proyeccion."""
+    from excel_manager import _save_wb
+    excel_path = excel_path or EXCEL_PATH
+    wb = load_workbook(excel_path)
+    if FLUJO_CAJA_SHEET in wb.sheetnames:
+        del wb[FLUJO_CAJA_SHEET]
+    ws = wb.create_sheet(FLUJO_CAJA_SHEET)
+
+    header = ["SECCION"] + [_month_label(y, m) for (y, m) in months]
+    ws.append(header)
+
+    ws.append(["SALDO INICIAL"] + [saldo_data.get(ym, {}).get("saldo_inicio", 0)
+                                    for ym in months])
+
+    ws.append(["INGRESOS"])
+    exportadoras = sorted({i.get("exportadora", "") for i in ingresos})
+    for exp in exportadoras:
+        if not exp:
+            continue
+        row = [f"  {exp}"]
+        for ym in months:
+            total = sum(i["monto_clp"] for i in ingresos
+                          if i.get("exportadora") == exp
+                          and i["year"] == ym[0] and i["month"] == ym[1])
+            row.append(total)
+        ws.append(row)
+    ws.append(["  TOTAL INGRESOS"] + [saldo_data.get(ym, {}).get("ingresos", 0)
+                                       for ym in months])
+
+    ws.append(["EGRESOS"])
+    cats_set = sorted({k[2] for k in egresos.keys()})
+    for cat in cats_set:
+        row = [f"  {cat}"]
+        for ym in months:
+            total = sum(monto for (y, m, c, _cu), monto in egresos.items()
+                          if y == ym[0] and m == ym[1] and c == cat)
+            row.append(total)
+        ws.append(row)
+    ws.append(["  TOTAL EGRESOS"] + [saldo_data.get(ym, {}).get("egresos", 0)
+                                      for ym in months])
+
+    ws.append(["SALDO CIERRE MES"] + [saldo_data.get(ym, {}).get("saldo_cierre", 0)
+                                       for ym in months])
+
+    ws.column_dimensions["A"].width = 28
+    for i in range(2, len(months) + 2):
+        ws.column_dimensions[chr(64 + i)].width = 14
+
+    _save_wb(wb, excel_path)
+    wb.close()
