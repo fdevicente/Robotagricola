@@ -300,3 +300,39 @@ def write_flujo_caja(saldo_data: dict, egresos: dict, ingresos: list,
 
     _save_wb(wb, excel_path)
     wb.close()
+
+
+def get_cash_flow(start: tuple, end: tuple,
+                    saldo_inicial: float,
+                    base_year: int = 2025,
+                    excel_path: str | None = None) -> dict:
+    """API principal del projector."""
+    historicos = load_historical_egresos(excel_path, year=base_year)
+    hc = load_hectareas(excel_path)
+    ajustes = load_ajustes_manuales(excel_path)
+    ingresos = load_expected_ingresos(excel_path)
+
+    months = []
+    y, mo = start
+    while (y, mo) <= end:
+        months.append((y, mo))
+        mo += 1
+        if mo > 12:
+            mo = 1
+            y += 1
+
+    egresos_proj = {}
+    years_target = {ym[0] for ym in months}
+    for ty in years_target:
+        e = compute_egresos_proyectados(
+            historicos=historicos, ajustes=ajustes, hc=hc,
+            base_year=base_year, target_year=ty,
+        )
+        egresos_proj.update(e)
+
+    saldo = compute_saldo_mensual(saldo_inicial, ingresos, egresos_proj, months)
+
+    return {
+        "months": months, "saldo": saldo,
+        "egresos": egresos_proj, "ingresos": ingresos,
+    }
