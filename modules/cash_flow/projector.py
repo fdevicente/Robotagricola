@@ -170,3 +170,22 @@ def load_expected_ingresos(excel_path: str | None = None) -> list:
         })
     wb.close()
     return ingresos
+
+
+def compute_factor_hc(hc: dict, cultivo: str, base_year: int, target_year: int) -> float:
+    """Factor de escalamiento por hectareas."""
+    if base_year == target_year:
+        return 1.0
+    if base_year not in hc or target_year not in hc:
+        return 1.0
+
+    if cultivo.upper() == "GENERAL":
+        base = sum(hc[base_year].values())
+        target = sum(hc[target_year].values())
+    else:
+        base = hc[base_year].get(cultivo.upper(), 0)
+        target = hc[target_year].get(cultivo.upper(), 0)
+
+    if base <= 0:
+        return 1.0
+    return target / base
