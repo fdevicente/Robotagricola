@@ -211,3 +211,30 @@ def compute_egresos_proyectados(historicos: dict, ajustes: list,
         proj[key] += a["monto"]
 
     return dict(proj)
+
+
+def compute_saldo_mensual(saldo_inicial: float, ingresos: list,
+                            egresos: dict, months: list) -> dict:
+    """Running balance mes a mes."""
+    ing_mes: dict = defaultdict(float)
+    for i in ingresos:
+        ing_mes[(i["year"], i["month"])] += i["monto_clp"]
+
+    eg_mes: dict = defaultdict(float)
+    for (y, m, _cat, _cul), monto in egresos.items():
+        eg_mes[(y, m)] += monto
+
+    result = {}
+    saldo = saldo_inicial
+    for ym in months:
+        ing = ing_mes.get(ym, 0)
+        eg = eg_mes.get(ym, 0)
+        saldo_cierre = saldo + ing - eg
+        result[ym] = {
+            "saldo_inicio": saldo,
+            "ingresos": ing,
+            "egresos": eg,
+            "saldo_cierre": saldo_cierre,
+        }
+        saldo = saldo_cierre
+    return result
