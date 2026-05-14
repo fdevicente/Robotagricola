@@ -1615,9 +1615,10 @@ def main():
     app.add_handler(CommandHandler("banco",    cmd_banco))
     app.add_handler(CommandHandler("cancelar", cmd_cancelar))
     # Cash Flow (Fase 1)
-    from handlers.cash_flow_cmds import cmd_proyeccion, cmd_categoria
+    from handlers.cash_flow_cmds import cmd_proyeccion, cmd_categoria, cosecha_conv
     app.add_handler(CommandHandler("proyeccion", cmd_proyeccion))
     app.add_handler(CommandHandler("categoria",  cmd_categoria))
+    app.add_handler(cosecha_conv)
     # Tareas y Bitácora
     app.add_handler(CommandHandler("tarea",    cmd_tarea))
     app.add_handler(CommandHandler("tareas",   cmd_tareas))

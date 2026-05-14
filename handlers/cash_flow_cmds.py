@@ -81,3 +81,57 @@ async def cmd_categoria(update, context):
                        saldo_inicial=0)
     text = format_categoria(cat, cf["egresos"], months)
     await update.message.reply_text(text, parse_mode="Markdown")
+
+
+from telegram.ext import (
+    ConversationHandler, CommandHandler, MessageHandler, filters,
+)
+from modules.cash_flow.cosecha_wizard import CosechaWizard, save_to_cosechas
+
+WIZARD_STATE = 1
+
+
+async def cmd_cosecha_start(update, context):
+    args = context.args or []
+    if not args:
+        await update.message.reply_text("Uso: /cosecha <NOGALES|CEREZOS|AVELLANOS>")
+        return ConversationHandler.END
+    cultivo = args[0].upper()
+    if cultivo not in ("NOGALES", "CEREZOS", "AVELLANOS"):
+        await update.message.reply_text("Cultivo invalido")
+        return ConversationHandler.END
+    w = CosechaWizard(cultivo=cultivo)
+    context.user_data["cosecha_wizard"] = w
+    await update.message.reply_text(w.prompt)
+    return WIZARD_STATE
+
+
+async def cb_cosecha_resp(update, context):
+    w = context.user_data.get("cosecha_wizard")
+    if not w:
+        return ConversationHandler.END
+    w.responder(update.message.text)
+    if w.estado == "resumen":
+        from datetime import date
+        year = date.today().year
+        added = save_to_cosechas(w.data, year=year)
+        await update.message.reply_text(
+            f"Listo. {added} filas guardadas en Cosechas.")
+        context.user_data.pop("cosecha_wizard", None)
+        return ConversationHandler.END
+    await update.message.reply_text(w.prompt)
+    return WIZARD_STATE
+
+
+async def cmd_cosecha_cancel(update, context):
+    context.user_data.pop("cosecha_wizard", None)
+    await update.message.reply_text("Wizard cancelado.")
+    return ConversationHandler.END
+
+
+cosecha_conv = ConversationHandler(
+    entry_points=[CommandHandler("cosecha", cmd_cosecha_start)],
+    states={WIZARD_STATE: [MessageHandler(filters.TEXT & ~filters.COMMAND,
+                                            cb_cosecha_resp)]},
+    fallbacks=[CommandHandler("cancelar", cmd_cosecha_cancel)],
+)
