@@ -59,3 +59,65 @@ def load_historical_egresos(excel_path: str | None = None,
         agg[(ym[0], ym[1], categoria, cultivo)] += float(total)
     wb.close()
     return dict(agg)
+
+
+def load_hectareas(excel_path: str | None = None) -> dict:
+    """Devuelve {year: {cultivo: hc}}. Cultivos en uppercase."""
+    excel_path = excel_path or EXCEL_PATH
+    wb = load_workbook(excel_path, read_only=True, data_only=True)
+    ws = wb[HECTAREAS_SHEET]
+    hc: dict = {}
+    for row in ws.iter_rows(min_row=2, max_col=5, values_only=True):
+        year = row[0]
+        if not isinstance(year, int):
+            continue
+        hc[year] = {
+            "NOGALES": float(row[1] or 0),
+            "CEREZOS": float(row[2] or 0),
+            "AVELLANOS": float(row[3] or 0),
+        }
+    wb.close()
+    return hc
+
+
+def _parse_mes_str(v):
+    if isinstance(v, datetime):
+        return (v.year, v.month)
+    if isinstance(v, date):
+        return (v.year, v.month)
+    if isinstance(v, str):
+        try:
+            parts = v.split("-")
+            return (int(parts[0]), int(parts[1]))
+        except (IndexError, ValueError):
+            return None
+    return None
+
+
+def load_ajustes_manuales(excel_path: str | None = None) -> list:
+    """Devuelve lista de ajustes activos."""
+    excel_path = excel_path or EXCEL_PATH
+    wb = load_workbook(excel_path, read_only=True, data_only=True)
+    ws = wb[AJUSTES_SHEET]
+    ajustes = []
+    for row in ws.iter_rows(min_row=2, max_col=7, values_only=True):
+        if not row[1]:
+            continue
+        if row[6] is False:
+            continue
+        ym = _parse_mes_str(row[1])
+        if not ym:
+            continue
+        try:
+            monto = float(row[4] or 0)
+        except (TypeError, ValueError):
+            continue
+        ajustes.append({
+            "mes_proyectado": ym,
+            "categoria": row[2],
+            "cultivo": row[3] or "GENERAL",
+            "monto": monto,
+            "razon": row[5] or "",
+        })
+    wb.close()
+    return ajustes
