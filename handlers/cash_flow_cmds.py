@@ -50,3 +50,34 @@ async def cmd_proyeccion(update, context):
                        saldo_inicial=saldo_actual)
     text = format_proyeccion(cf)
     await update.message.reply_text(text, parse_mode="Markdown")
+
+
+def format_categoria(cat_name: str, egresos: dict, months: list) -> str:
+    """Texto Telegram con detalle de una categoria."""
+    lines = [f"📋 *Categoria: {cat_name}*", ""]
+    total = 0
+    for ym in months:
+        m_total = sum(v for (y, mo, c, _cul), v in egresos.items()
+                       if y == ym[0] and mo == ym[1] and c == cat_name)
+        total += m_total
+        lines.append(f"`{_label(*ym):<8} {_fmt_money(m_total):>14}`")
+    lines.append("")
+    lines.append(f"`Total      {_fmt_money(total):>14}`")
+    return "\n".join(lines)
+
+
+async def cmd_categoria(update, context):
+    """`/categoria <nombre>` muestra gasto mensual."""
+    args = context.args or []
+    if not args:
+        await update.message.reply_text(
+            "Uso: /categoria <nombre>. Ej: /categoria Fertilizantes")
+        return
+    cat = " ".join(args)
+    from datetime import date
+    today = date.today()
+    months = [(today.year, m) for m in range(1, today.month + 1)]
+    cf = get_cash_flow(start=months[0], end=months[-1],
+                       saldo_inicial=0)
+    text = format_categoria(cat, cf["egresos"], months)
+    await update.message.reply_text(text, parse_mode="Markdown")
