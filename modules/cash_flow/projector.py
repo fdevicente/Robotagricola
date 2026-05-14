@@ -121,3 +121,52 @@ def load_ajustes_manuales(excel_path: str | None = None) -> list:
         })
     wb.close()
     return ajustes
+
+
+def load_expected_ingresos(excel_path: str | None = None) -> list:
+    """Lee Cosechas, devuelve ingresos proyectados convertidos a CLP."""
+    from config import CASH_FLOW_CONFIG
+    usd_clp = CASH_FLOW_CONFIG.get("usd_clp_estimado", 1000)
+
+    excel_path = excel_path or EXCEL_PATH
+    wb = load_workbook(excel_path, read_only=True, data_only=True)
+    ws = wb[COSECHAS_SHEET]
+    ingresos = []
+    for row in ws.iter_rows(min_row=2, max_col=16, values_only=True):
+        if not row[0]:
+            continue
+        estado = row[11]
+        if estado == "recibido":
+            monto_real = row[13]
+            fecha = row[12]
+            moneda = (row[14] or "CLP").upper()
+            try:
+                m_val = float(monto_real or 0)
+            except (TypeError, ValueError):
+                m_val = 0
+            if m_val <= 0:
+                continue
+            monto_clp = m_val if moneda == "CLP" else m_val * usd_clp
+            ym = _to_year_month(fecha)
+        else:
+            monto_usd = row[9]
+            try:
+                m_val = float(monto_usd or 0)
+            except (TypeError, ValueError):
+                m_val = 0
+            if m_val <= 0:
+                continue
+            monto_clp = m_val * usd_clp
+            ym = _to_year_month(row[8])
+        if not ym:
+            continue
+        ingresos.append({
+            "year": ym[0], "month": ym[1],
+            "cultivo": row[1] or "GENERAL",
+            "exportadora": row[3] or "",
+            "tipo_cuota": row[10] or "",
+            "estado": estado or "esperado",
+            "monto_clp": float(monto_clp),
+        })
+    wb.close()
+    return ingresos
