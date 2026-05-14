@@ -1674,7 +1674,12 @@ def main():
     # Actualizar días de vacaciones el 1ro de cada mes
     app.job_queue.run_monthly(job_vacaciones_mensuales, when=dtime(hour=7, minute=0, tzinfo=tz_chile),
                               day=1, name="vacaciones_mensuales")
-    logger.info("⏰ Jobs programados: banco 08:00/18:00, vacaciones día 1")
+    # Resumen semanal cash flow: lunes 08:00
+    from handlers.cash_flow_jobs import job_resumen_semanal
+    app.job_queue.run_daily(job_resumen_semanal,
+                              time=dtime(hour=8, minute=0, tzinfo=tz_chile),
+                              days=(0,), name="resumen_semanal")
+    logger.info("⏰ Jobs programados: banco 08:00/18:00, vacaciones día 1, resumen lunes 08:00")
 
     logger.info("✅ Bot iniciado. Esperando mensajes...")
     app.run_polling()
