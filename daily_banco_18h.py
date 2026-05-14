@@ -31,15 +31,19 @@ def _categorize_uncategorized_cargos(excel_path: str, limit: int | None = None) 
     wb = load_workbook(excel_path, read_only=True, data_only=True)
     ws = wb[CUENTA_BANCO_SHEET]
     target_rows = []
-    for r in range(2, ws.max_row + 1):
-        if not ws.cell(r, 1).value:
+    for r_idx, row in enumerate(ws.iter_rows(min_row=2, max_col=10,
+                                              values_only=True), start=2):
+        if not row[0]:  # fecha
             continue
-        cargo = float(ws.cell(r, 4).value or 0)
+        try:
+            cargo = float(row[3] or 0)
+        except (TypeError, ValueError):
+            continue
         if cargo <= 0:
             continue
-        if ws.cell(r, COL_BANCO_TIPO).value:
+        if row[6]:  # Tipo
             continue
-        target_rows.append(r)
+        target_rows.append(r_idx)
     wb.close()
     if limit is not None:
         target_rows = target_rows[:limit]

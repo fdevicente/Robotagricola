@@ -992,54 +992,70 @@ def _coerce_date(v):
 def read_facturas_pendientes(excel_path=None) -> list[dict]:
     """Lee Master.Facturas, devuelve facturas con Fecha Pago vacia.
 
-    fecha_emision se devuelve como date (no string) para evitar reparsing.
+    Usa iter_rows() para evitar slow random-access en read_only mode.
     """
     excel_path = excel_path or EXCEL_PATH
     wb = load_workbook(excel_path, read_only=True, data_only=True)
     ws = wb[SHEET_NAME]
     pendientes = []
-    for r in range(2, ws.max_row + 1):
-        proveedor = ws.cell(r, 4).value
+    for r_idx, row in enumerate(ws.iter_rows(min_row=2, max_col=15,
+                                              values_only=True), start=2):
+        # row index: 0=fecha emision, 1=fecha venc, 2=fecha pago, 3=proveedor,
+        # 4=rut, 5=documento, 6=nro factura, 7=glosa, 14=total
+        proveedor = row[3]
         if not proveedor:
             continue
-        if ws.cell(r, 3).value:
+        if row[2]:  # Fecha Pago
             continue
         pendientes.append({
-            "fila": r,
-            "fecha_emision": _coerce_date(ws.cell(r, 1).value),
-            "fecha_vencimiento": _coerce_date(ws.cell(r, 2).value),
+            "fila": r_idx,
+            "fecha_emision": _coerce_date(row[0]),
+            "fecha_vencimiento": _coerce_date(row[1]),
             "proveedor": proveedor,
-            "rut": ws.cell(r, 5).value,
-            "nro_factura": ws.cell(r, 7).value,
-            "glosa": ws.cell(r, 8).value,
-            "total": ws.cell(r, 15).value,
+            "rut": row[4],
+            "nro_factura": row[6],
+            "glosa": row[7],
+            "total": row[14],
         })
     wb.close()
     return pendientes
 
 
 def read_bank_movements_unlinked(excel_path=None) -> list[dict]:
-    """Lee Cuenta Banco, devuelve cargos sin Factura_linkeada."""
+    """Lee Cuenta Banco, devuelve cargos sin Factura_linkeada.
+
+    Usa iter_rows() para evitar slow random-access.
+    """
     excel_path = excel_path or EXCEL_PATH
     wb = load_workbook(excel_path, read_only=True, data_only=True)
     ws = wb[CUENTA_BANCO_SHEET]
     movs = []
-    for r in range(2, ws.max_row + 1):
-        fecha = ws.cell(r, 1).value
+    # Lee hasta col J (10) = Factura_linkeada
+    for r_idx, row in enumerate(ws.iter_rows(min_row=2, max_col=10,
+                                              values_only=True), start=2):
+        fecha = row[0]
         if not fecha:
             continue
-        cargo = float(ws.cell(r, 4).value or 0)
+        cargo_v = row[3]
+        try:
+            cargo = float(cargo_v or 0)
+        except (TypeError, ValueError):
+            continue
         if cargo <= 0:
             continue
-        if ws.cell(r, COL_BANCO_FACTURA_LINK).value:
+        if row[9]:  # Factura_linkeada
             continue
+        try:
+            abono = float(row[4] or 0)
+        except (TypeError, ValueError):
+            abono = 0.0
         movs.append({
-            "fila": r,
+            "fila": r_idx,
             "fecha": _coerce_date(fecha) or fecha,
-            "descripcion": ws.cell(r, 2).value or "",
-            "referencia": ws.cell(r, 3).value or "",
+            "descripcion": row[1] or "",
+            "referencia": row[2] or "",
             "cargo": cargo,
-            "abono": float(ws.cell(r, 5).value or 0),
+            "abono": abono,
         })
     wb.close()
     return movs
