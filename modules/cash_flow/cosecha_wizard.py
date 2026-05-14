@@ -117,3 +117,46 @@ class CosechaWizard:
             self.data["liquidacion"] = {"fecha": m.group(1),
                                          "usd": float(m.group(2))}
             self._advance("resumen")
+
+
+def save_to_cosechas(data: dict, year: int,
+                       excel_path: str | None = None) -> int:
+    """Escribe filas de wizard en Master.Cosechas. Devuelve # filas agregadas."""
+    from openpyxl import load_workbook
+    from config import EXCEL_PATH
+    from excel_manager import COSECHAS_SHEET, _save_wb
+    excel_path = excel_path or EXCEL_PATH
+
+    wb = load_workbook(excel_path)
+    ws = wb[COSECHAS_SHEET]
+    added = 0
+    has_liq = bool(data.get("liquidacion"))
+    for exp in data["exportadoras"]:
+        n_cuotas_total = exp.get("n_cuotas", len(exp.get("cuotas", [])))
+        if has_liq:
+            n_cuotas_total += 1
+        for i, cuota in enumerate(exp.get("cuotas", []), start=1):
+            ws.append([
+                year, data["cultivo"], data["kg_total"], exp["nombre"],
+                exp["kg"], exp["precio_usd_kg"],
+                n_cuotas_total, i, cuota["fecha"], cuota["usd"],
+                "adelanto", "esperado",
+                None, None, "", "",
+            ])
+            added += 1
+
+    if has_liq:
+        liq = data["liquidacion"]
+        exp = data["exportadoras"][0]
+        n_total = exp.get("n_cuotas", 0) + 1
+        ws.append([
+            year, data["cultivo"], data["kg_total"], exp["nombre"],
+            exp["kg"], exp["precio_usd_kg"], n_total, n_total,
+            liq["fecha"], liq["usd"], "liquidacion final", "esperado",
+            None, None, "", "",
+        ])
+        added += 1
+
+    _save_wb(wb, excel_path)
+    wb.close()
+    return added
