@@ -127,31 +127,8 @@ def _es_boleta(items):
     doc = str(items[0].get("Documento") or "").lower()
     return "boleta" in doc and "boleta de honorario" not in doc
 
-def _esc(text):
-    """Escapa caracteres especiales de Telegram Markdown."""
-    if not text: return text
-    for ch in ('*', '_', '`', '[', ']'):
-        text = str(text).replace(ch, '')
-    return text
-
-def _format_date(val):
-    if val is None: return "—"
-    try:
-        if isinstance(val, str): return val[:10]
-        return val.strftime("%d/%m/%Y")
-    except: return str(val)
-
-def _calc_vencimiento(fecha_emision):
-    """Calcula fecha de vencimiento = emisión + 30 días si no viene."""
-    try:
-        from datetime import datetime
-        from dateutil.relativedelta import relativedelta
-        if not fecha_emision:
-            return None
-        dt = datetime.strptime(str(fecha_emision)[:10], "%Y-%m-%d")
-        return (dt + relativedelta(months=1)).strftime("%Y-%m-%d")
-    except Exception:
-        return None
+# Imports de utils/ (deduplicados desde main.py)
+from utils.formatting import esc as _esc, format_date as _format_date, calc_vencimiento as _calc_vencimiento
 
 
 def _registrar_correccion(item: dict, campo: str, valor_original, valor_nuevo):
@@ -291,46 +268,14 @@ def _build_preview(items):
     lines.append("¿Qué deseas hacer?")
     return "\n".join(lines)
 
-def _main_keyboard():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ Guardar en Excel", callback_data="confirm_save"),
-         InlineKeyboardButton("✏️ Editar campo",    callback_data="edit_menu")],
-        [InlineKeyboardButton("❌ Cancelar",         callback_data="cancel_save")],
-    ])
+from utils.keyboards import (
+    main_keyboard as _main_keyboard,
+    edit_keyboard as _edit_keyboard,
+    proveedor_nuevo_keyboard as _proveedor_nuevo_keyboard,
+)
 
 CAMPOS_COMUNES = {"edit_proveedor", "edit_rut", "edit_fecha", "edit_vence", "edit_nro", "edit_ref"}
 CAMPOS_POR_ITEM = {"edit_glosa", "edit_glosa2", "edit_cantidad", "edit_unitario", "edit_total"}
-
-def _edit_keyboard(items=None):
-    n_items = len(items) if items else 1
-    kb = [
-        [InlineKeyboardButton("🏢 Proveedor",  callback_data="edit_proveedor"),
-         InlineKeyboardButton("🪪 RUT",         callback_data="edit_rut")],
-        [InlineKeyboardButton("📅 Fecha",       callback_data="edit_fecha"),
-         InlineKeyboardButton("⏰ Vencimiento", callback_data="edit_vence")],
-        [InlineKeyboardButton("📄 Nº Documento", callback_data="edit_nro"),
-         InlineKeyboardButton("🔗 Ref. Factura", callback_data="edit_ref")],
-        [InlineKeyboardButton("📦 Glosa",       callback_data="edit_glosa")],
-        [InlineKeyboardButton("📝 Detalle",     callback_data="edit_glosa2"),
-         InlineKeyboardButton("🔢 Cantidad",    callback_data="edit_cantidad")],
-        [InlineKeyboardButton("💲 Unit neto",   callback_data="edit_unitario"),
-         InlineKeyboardButton("💰 Total ítem",  callback_data="edit_total")],
-        [InlineKeyboardButton("💰 TOTAL FACTURA", callback_data="edit_total_factura")],
-    ]
-    # Gestión de ítems (agregar / eliminar)
-    item_row = [InlineKeyboardButton("➕ Agregar ítem", callback_data="add_item")]
-    if n_items > 1:
-        item_row.append(InlineKeyboardButton("🗑️ Eliminar ítem", callback_data="del_item"))
-    kb.append(item_row)
-    kb.append([InlineKeyboardButton("« Volver", callback_data="back_preview")])
-    return InlineKeyboardMarkup(kb)
-
-
-def _proveedor_nuevo_keyboard():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ Sí, agregar a la lista", callback_data="add_proveedor_yes"),
-         InlineKeyboardButton("❌ No",                    callback_data="add_proveedor_no")],
-    ])
 
 def _rut_existe(rut):
     try:
