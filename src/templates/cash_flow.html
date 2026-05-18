@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Flujo de Caja - Agricola Santa Elisa</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+           margin: 0; padding: 20px; background: #f5f5f5; }
+    h1 { color: #333; }
+    nav a { margin-right: 15px; color: #1565C0; text-decoration: none; }
+    .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;
+             margin: 20px 0; }
+    .kpi { background: white; padding: 20px; border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .kpi h3 { margin: 0 0 5px 0; color: #777; font-size: 13px; font-weight: 500; }
+    .kpi .v { font-size: 24px; font-weight: bold; color: #333; }
+    .kpi .v.neg { color: #c62828; }
+    .panel { background: white; padding: 20px; border-radius: 8px; margin: 20px 0;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: right; padding: 6px 10px; border-bottom: 1px solid #eee; }
+    th { background: #f9f9f9; font-weight: 600; }
+    th:first-child, td:first-child { text-align: left; }
+    .neg { color: #c62828; }
+    form { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    input, select { padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+    button { padding: 8px 16px; background: #1565C0; color: white; border: none;
+              border-radius: 4px; cursor: pointer; }
+    #replante-result { margin-top: 10px; padding: 10px; border-radius: 4px; }
+    .ok { background: #c8e6c9; color: #1b5e20; }
+    .no { background: #ffcdd2; color: #b71c1c; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/">Inicio</a>
+    <a href="/cash-flow"><b>Flujo de Caja</b></a>
+  </nav>
+  <h1>📊 Flujo de Caja</h1>
+
+  <div class="kpis">
+    <div class="kpi"><h3>Saldo actual</h3>
+      <div class="v" id="kpi-saldo">—</div></div>
+    <div class="kpi"><h3>Saldo final proyectado</h3>
+      <div class="v" id="kpi-final">—</div></div>
+    <div class="kpi"><h3>Ingresos 12m</h3>
+      <div class="v" id="kpi-ingresos">—</div></div>
+    <div class="kpi"><h3>Egresos 12m</h3>
+      <div class="v" id="kpi-egresos">—</div></div>
+  </div>
+
+  <div class="panel">
+    <h2>Proyeccion mensual</h2>
+    <canvas id="chart-flujo" height="100"></canvas>
+  </div>
+
+  <div class="panel">
+    <h2>Tabla mensual</h2>
+    <table id="tabla-flujo">
+      <thead><tr>
+        <th>Concepto</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="panel">
+    <h2>Simulador replante</h2>
+    <form id="form-replante">
+      <select name="cultivo">
+        <option value="AVELLANOS">Avellanos</option>
+        <option value="CEREZOS">Cerezos</option>
+        <option value="NOGALES">Nogales</option>
+      </select>
+      <input type="number" name="hc" placeholder="Hectareas" step="0.5" value="2" required>
+      <input type="number" name="costo_por_hc" placeholder="Costo/hc CLP" value="5000000">
+      <button type="submit">Calcular</button>
+    </form>
+    <div id="replante-result"></div>
+  </div>
+
+  <script>
+    const fmt = v => "$" + Math.round(v).toLocaleString("es-CL");
+
+    async function loadCashFlow() {
+      const r = await fetch("/api/cash-flow?meses=12");
+      const d = await r.json();
+      const total_ing = d.ingresos.reduce((a, b) => a + b, 0);
+      const total_eg = d.egresos.reduce((a, b) => a + b, 0);
+      const saldo_final = d.saldo_cierre[d.saldo_cierre.length - 1];
+
+      document.getElementById("kpi-saldo").textContent = fmt(d.saldo_inicio[0]);
+      const fEl = document.getElementById("kpi-final");
+      fEl.textContent = fmt(saldo_final);
+      if (saldo_final < 0) fEl.classList.add("neg");
+      document.getElementById("kpi-ingresos").textContent = fmt(total_ing);
+      document.getElementById("kpi-egresos").textContent = fmt(total_eg);
+
+      // Chart
+      new Chart(document.getElementById("chart-flujo"), {
+        type: "bar",
+        data: {
+          labels: d.labels,
+          datasets: [
+            {label: "Ingresos", data: d.ingresos, backgroundColor: "#2e7d32"},
+            {label: "Egresos",  data: d.egresos.map(v => -v),
+              backgroundColor: "#c62828"},
+            {label: "Saldo cierre", data: d.saldo_cierre, type: "line",
+              borderColor: "#1565C0", backgroundColor: "#1565C0",
+              tension: 0.2, yAxisID: "y2"},
+          ],
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {ticks: {callback: v => fmt(v)}},
+            y2: {position: "right",
+                  ticks: {callback: v => fmt(v)},
+                  grid: {drawOnChartArea: false}},
+          },
+        },
+      });
+
+      // Tabla
+      const thead = document.querySelector("#tabla-flujo thead tr");
+      d.labels.forEach(l => {
+        const th = document.createElement("th"); th.textContent = l;
+        thead.appendChild(th);
+      });
+      const tbody = document.querySelector("#tabla-flujo tbody");
+      const rows = [
+        ["Saldo inicio", d.saldo_inicio],
+        ["Ingresos", d.ingresos],
+        ["Egresos", d.egresos],
+        ["Saldo cierre", d.saldo_cierre],
+      ];
+      rows.forEach(([name, vals]) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td><b>${name}</b></td>` +
+          vals.map(v => `<td class="${v < 0 ? 'neg' : ''}">${fmt(v)}</td>`).join("");
+        tbody.appendChild(tr);
+      });
+
+      // Guardar saldo final para replante
+      window.__saldoFinal = saldo_final;
+    }
+
+    document.getElementById("form-replante").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const f = new FormData(e.target);
+      const body = {
+        cultivo: f.get("cultivo"),
+        hc: parseFloat(f.get("hc")),
+        saldo_proyectado: window.__saldoFinal || 0,
+        saldo_minimo: 36000000,
+        costo_por_hc: parseFloat(f.get("costo_por_hc")),
+      };
+      const r = await fetch("/api/cash-flow/replante",
+        {method: "POST", headers: {"Content-Type": "application/json"},
+         body: JSON.stringify(body)});
+      const d = await r.json();
+      const el = document.getElementById("replante-result");
+      if (d.alcanza) {
+        el.className = "ok";
+        el.textContent = `✅ Alcanza. Costo total: ${fmt(d.costo_total)}, ` +
+                          `disponible: ${fmt(d.disponible)}`;
+      } else {
+        el.className = "no";
+        el.textContent = `🔴 No alcanza. Faltan ${fmt(d.deficit)}`;
+      }
+    });
+
+    loadCashFlow();
+  </script>
+</body>
+</html>

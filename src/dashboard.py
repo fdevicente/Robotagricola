@@ -16,6 +16,15 @@ from dashboard_data import get_dashboard_data, get_facturas_summary, get_compara
     get_costos_por_cultivo, get_exportaciones, get_caja_chica, get_cuenta_banco, \
     get_inventario_resumen, get_personal_resumen, get_tareas_resumen, \
     get_facturas_detalle, get_movimientos_banco
+from modules.cash_flow.projector import get_cash_flow
+from modules.cash_flow.replante import afford_check
+
+_MESES_LBL = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+                "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+
+
+def _month_label(y, m):
+    return f"{_MESES_LBL[m]}-{str(y)[-2:]}"
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -100,6 +109,50 @@ def api_facturas_detalle():
 @app.route("/api/banco/movimientos")
 def api_banco_movimientos():
     return jsonify(get_movimientos_banco())
+
+
+@app.route("/cash-flow")
+def cash_flow_page():
+    return render_template("cash_flow.html")
+
+
+@app.route("/api/cash-flow")
+def api_cash_flow():
+    saldo = float(request.args.get("saldo", 130_600_000))
+    meses = int(request.args.get("meses", 12))
+    from datetime import date as _date
+    today = _date.today()
+    sy, sm = today.year, today.month
+    ey, em = sy, sm
+    for _ in range(meses - 1):
+        em += 1
+        if em > 12:
+            em = 1
+            ey += 1
+    cf = get_cash_flow(start=(sy, sm), end=(ey, em),
+                       saldo_inicial=saldo)
+    labels = [_month_label(y, m) for y, m in cf["months"]]
+    return jsonify({
+        "labels": labels,
+        "saldo_inicio": [cf["saldo"][ym]["saldo_inicio"] for ym in cf["months"]],
+        "ingresos": [cf["saldo"][ym]["ingresos"] for ym in cf["months"]],
+        "egresos": [cf["saldo"][ym]["egresos"] for ym in cf["months"]],
+        "saldo_cierre": [cf["saldo"][ym]["saldo_cierre"] for ym in cf["months"]],
+        "ingresos_detail": cf["ingresos"],
+    })
+
+
+@app.route("/api/cash-flow/replante", methods=["POST"])
+def api_replante():
+    body = request.get_json() or {}
+    result = afford_check(
+        cultivo=body.get("cultivo", "AVELLANOS"),
+        hc=float(body.get("hc", 0)),
+        saldo_proyectado=float(body.get("saldo_proyectado", 0)),
+        saldo_minimo=float(body.get("saldo_minimo", 0)),
+        costo_por_hc=float(body.get("costo_por_hc", 5_000_000)),
+    )
+    return jsonify(result)
 
 
 if __name__ == "__main__":
