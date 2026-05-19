@@ -549,20 +549,10 @@ async def job_sync_banco(context: ContextTypes.DEFAULT_TYPE):
             pass
 
 
-async def job_vacaciones_mensuales(context: ContextTypes.DEFAULT_TYPE):
-    """Job mensual: acumula días de vacaciones a cada trabajador."""
-    try:
-        result = await asyncio.to_thread(actualizar_dias_mensuales)
-        chat_id = context.bot_data.get("banco_chat_id") or TELEGRAM_CHAT_ID
-        if chat_id:
-            await context.bot.send_message(
-                chat_id=int(chat_id),
-                text=f"🏖️ *Vacaciones actualizadas*\n\n"
-                     f"📊 {result['actualizados']} trabajadores\n"
-                     f"📅 +{result['incremento']} días acumulados por persona",
-                parse_mode="Markdown")
-    except Exception as e:
-        logger.error(f"Job vacaciones falló: {e}")
+from handlers.personal import (
+    cmd_personal, cmd_vacaciones, cmd_agregar_trabajador,
+    handle_text_vacacion, handle_text_trabajador, job_vacaciones_mensuales,
+)
 
 
 async def cmd_cancelar(update, context):
@@ -607,45 +597,6 @@ from handlers.inventario_h import (
 )
 
 # ── VACACIONES Y PERSONAL ────────────────────
-async def cmd_personal(update, context):
-    personal = await asyncio.to_thread(listar_personal)
-    if not personal:
-        await update.message.reply_text("👥 No hay personal registrado.\nUsa /agregar\\_trabajador para agregar.", parse_mode="Markdown"); return
-    texto = "👥 *Personal — Agrícola Santa Elisa:*\n\n"
-    for p in personal:
-        texto += f"• *{_esc(p['nombre'])}*"
-        if p['cargo']:
-            texto += f" — {_esc(p['cargo'])}"
-        texto += f"\n  📅 Pendientes: *{p['dias_pendientes']:.0f} días*"
-        if p['ultima_vacacion']:
-            texto += f" | Última: {p['ultima_vacacion'][:10]}"
-        texto += "\n"
-    try:
-        await update.message.reply_text(texto, parse_mode="Markdown")
-    except Exception:
-        await update.message.reply_text(texto)
-
-async def cmd_vacaciones(update, context):
-    context.user_data["vacacion_state"] = "esperando_nombre"
-    context.user_data["vacacion_data"] = {}
-    personal = await asyncio.to_thread(listar_personal)
-    if personal:
-        nombres = "\n".join(f"  • {p['nombre']}" for p in personal)
-        await update.message.reply_text(
-            f"🏖️ *Registrar vacaciones*\n\nPersonal:\n{nombres}\n\n"
-            "Escribe el *nombre del trabajador*:\n(o /cancelar)",
-            parse_mode="Markdown")
-    else:
-        await update.message.reply_text(
-            "🏖️ *Registrar vacaciones*\n\nNo hay personal registrado.\n"
-            "Usa /agregar\\_trabajador primero.", parse_mode="Markdown")
-
-async def cmd_agregar_trabajador(update, context):
-    context.user_data["trabajador_state"] = "esperando_nombre"
-    await update.message.reply_text(
-        "👤 *Agregar trabajador*\n\nEscribe el *nombre completo*:\n(o /cancelar)",
-        parse_mode="Markdown")
-
 # ── ARCHIVOS ──────────────────────────────────
 async def _download_with_retry(f, path, retries=3):
     """Descarga archivo de Telegram con reintentos."""
@@ -1170,85 +1121,12 @@ async def handle_text_edit(update, context):
         return
 
     # ── Flujo /vacaciones ──
-    vac_state = context.user_data.get("vacacion_state")
-    if vac_state:
-        texto = update.message.text.strip()
-        data = context.user_data.get("vacacion_data", {})
-        if vac_state == "esperando_nombre":
-            data["nombre"] = texto
-            context.user_data["vacacion_data"] = data
-            context.user_data["vacacion_state"] = "esperando_inicio"
-            await update.message.reply_text(
-                f"🏖️ *Trabajador:* {_esc(texto)}\n\n📅 Fecha *inicio* vacaciones (DD/MM/YYYY):",
-                parse_mode="Markdown")
-            return
-        if vac_state == "esperando_inicio":
-            from dateutil import parser as date_parser
-            try:
-                if "/" in texto:
-                    parts = texto.split("/")
-                    if len(parts) == 3 and len(parts[0]) <= 2:
-                        fecha = datetime.strptime(texto, "%d/%m/%Y").strftime("%Y-%m-%d")
-                    else:
-                        fecha = date_parser.parse(texto).strftime("%Y-%m-%d")
-                else:
-                    fecha = date_parser.parse(texto).strftime("%Y-%m-%d")
-            except Exception:
-                await update.message.reply_text("❌ Formato no válido. Usa DD/MM/YYYY"); return
-            data["inicio"] = fecha
-            context.user_data["vacacion_data"] = data
-            context.user_data["vacacion_state"] = "esperando_fin"
-            await update.message.reply_text(
-                f"📅 Inicio: *{fecha}*\n\n📅 Fecha *término* vacaciones (DD/MM/YYYY):",
-                parse_mode="Markdown")
-            return
-        if vac_state == "esperando_fin":
-            from dateutil import parser as date_parser
-            try:
-                if "/" in texto:
-                    parts = texto.split("/")
-                    if len(parts) == 3 and len(parts[0]) <= 2:
-                        fecha = datetime.strptime(texto, "%d/%m/%Y").strftime("%Y-%m-%d")
-                    else:
-                        fecha = date_parser.parse(texto).strftime("%Y-%m-%d")
-                else:
-                    fecha = date_parser.parse(texto).strftime("%Y-%m-%d")
-            except Exception:
-                await update.message.reply_text("❌ Formato no válido. Usa DD/MM/YYYY"); return
-            result = await asyncio.to_thread(
-                registrar_vacacion, data.get("nombre", ""), data.get("inicio", ""), fecha)
-            context.user_data["vacacion_state"] = None
-            context.user_data["vacacion_data"] = {}
-            await update.message.reply_text(
-                f"🏖️ *Vacaciones registradas*\n\n"
-                f"👤 {_esc(result['nombre'])}\n"
-                f"📅 {result['inicio']} al {result['fin']}\n"
-                f"📊 *{result['dias_habiles']} días hábiles* ({result['dias_corridos']} corridos)",
-                parse_mode="Markdown")
-            return
+    if await handle_text_vacacion(update, context):
+        return
 
     # ── Flujo /agregar_trabajador ──
-    trab_state = context.user_data.get("trabajador_state")
-    if trab_state:
-        texto = update.message.text.strip()
-        if trab_state == "esperando_nombre":
-            context.user_data["trabajador_nombre"] = texto
-            context.user_data["trabajador_state"] = "esperando_cargo"
-            await update.message.reply_text(
-                f"👤 *{_esc(texto)}*\n\nEscribe el *cargo* (o *-* para omitir):",
-                parse_mode="Markdown")
-            return
-        if trab_state == "esperando_cargo":
-            nombre = context.user_data.get("trabajador_nombre", "")
-            cargo = texto if texto != "-" else ""
-            ok = await asyncio.to_thread(agregar_trabajador, nombre, "", cargo)
-            context.user_data["trabajador_state"] = None
-            if ok:
-                await update.message.reply_text(
-                    f"✅ *{_esc(nombre)}* agregado al personal.", parse_mode="Markdown")
-            else:
-                await update.message.reply_text(f"⚠️ *{_esc(nombre)}* ya existe.", parse_mode="Markdown")
-            return
+    if await handle_text_trabajador(update, context):
+        return
 
     # ── Edición de factura pendiente ──
     campo = context.user_data.get("editing_field")
