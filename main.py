@@ -163,68 +163,10 @@ from handlers.inventario_h import (
 # ── ARCHIVOS ──────────────────────────────────
 from handlers.facturas import _download_with_retry
 
-async def handle_document(update, context):
-    doc = update.message.document
-    if doc.mime_type != "application/pdf":
-        await update.message.reply_text("❌ Solo acepto PDFs. Para imágenes, envíalas como foto."); return
-    status = await update.message.reply_text("📥 Recibí tu PDF. Descargándolo...")
-    try:
-        f = await context.bot.get_file(doc.file_id)
-        path = _save_path(doc.file_name)
-        if not await _download_with_retry(f, path):
-            await status.edit_text("❌ No pude descargar el PDF. Intenta enviarlo de nuevo."); return
-        await status.edit_text("🔍 Leyendo documento con IA… (puede tardar hasta 1 minuto)")
-        await _process_and_reply(update, context, status, path)
-    except Exception as e:
-        logger.error(f"Error en handle_document: {e}")
-        try: await status.edit_text("❌ Error al procesar el PDF. Intenta de nuevo.")
-        except: pass
-
-async def handle_photo(update, context):
-    photo = update.message.photo[-1]
-    status = await update.message.reply_text("📥 Recibí tu imagen. Descargándola...")
-    try:
-        f = await context.bot.get_file(photo.file_id)
-        filename = f"factura_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{photo.file_unique_id}.jpg"
-        path = _save_path(filename)
-        if not await _download_with_retry(f, path):
-            await status.edit_text("❌ No pude descargar la imagen. Intenta enviarla de nuevo."); return
-        await status.edit_text("🔍 Leyendo documento con IA… (puede tardar hasta 1 minuto)")
-        await _process_and_reply(update, context, status, path)
-    except Exception as e:
-        logger.error(f"Error en handle_photo: {e}")
-        try: await status.edit_text("❌ Error al procesar la imagen. Intenta de nuevo.")
-        except: pass
-
-# ── PROCESAMIENTO ─────────────────────────────
-async def _process_and_reply(update, context, status_msg, file_path):
-    result = await asyncio.to_thread(process_file, file_path)
-    if result.get("status") == "error":
-        await status_msg.edit_text(f"❌ {result.get('message')}", parse_mode="Markdown"); return
-    items = result.get("items", [])
-    if not items:
-        await status_msg.edit_text("⚠️ No se identificaron datos. Intenta con foto más nítida."); return
-
-    # Renombrar el archivo con Proveedor + Nº Documento para fácil identificación
-    file_path = _renombrar_archivo(file_path, items)
-
-    context.user_data["pending_items"]     = items
-    context.user_data["pending_file_path"] = file_path
-    context.user_data["editing_field"]     = None
-
-    preview = _build_preview(items)
-
-    # Advertir si es factura duplicada
-    if result.get("duplicado"):
-        preview = "⚠️ *ADVERTENCIA: Esta factura parece ya estar registrada.*\nRevisa bien antes de guardar.\n\n" + preview
-
-    try:
-        await status_msg.edit_text(preview, parse_mode="Markdown", reply_markup=_main_keyboard())
-    except Exception:
-        # Fallback sin Markdown si hay caracteres problemáticos
-        await status_msg.edit_text(preview, reply_markup=_main_keyboard())
-
-from handlers.facturas import _show_preview
+from handlers.facturas import (
+    _show_preview, handle_photo, handle_document,
+    _process_and_reply, _guardar_excel,
+)
 
 # ── CALLBACKS ─────────────────────────────────
 async def cb_confirm_save(update, context):
@@ -262,57 +204,6 @@ async def cb_add_proveedor_no(update, context):
     await _guardar_excel(query, context,
         context.user_data.get("pending_items", []),
         context.user_data.get("pending_file_path"))
-
-async def _guardar_excel(query, context, items, file_path):
-    es_boleta = _es_boleta(items)
-    await query.edit_message_text("💾 Guardando en el Excel…")
-    try:
-        if es_boleta:
-            success = await asyncio.to_thread(append_boleta, items)
-            # Mover archivo a carpeta de boletas
-            if success and file_path and os.path.exists(file_path):
-                import shutil
-                dest = _save_path_boleta(os.path.basename(file_path))
-                shutil.move(file_path, dest)
-                file_path = dest
-        else:
-            success = await asyncio.to_thread(append_to_excel, items)
-            # Intentar agregar insumos al inventario automáticamente
-            if success:
-                try:
-                    agregados = await asyncio.to_thread(agregar_stock_desde_factura, items)
-                    if agregados:
-                        logger.info(f"Inventario: {len(agregados)} insumos agregados desde factura")
-                except Exception as e:
-                    logger.warning(f"Error auto-inventario: {e}")
-    except Exception as e: logger.error(e); success = False
-    if success:
-        context.user_data["last_invoice_file"]   = file_path
-        context.user_data["last_invoice_rows"]   = len(items)
-        context.user_data["last_invoice_boleta"] = es_boleta
-        context.user_data["pending_items"]       = []
-        first     = items[0]
-        proveedor = first.get("Nombre Factura / Proveedor") or "Desconocido"
-        nro       = first.get("Numero Factura / Nro Documento") or "S/N"
-        # Preferir Total Factura (grand total del documento) sobre suma de líneas
-        total_factura_anchor = float(first.get("Total Factura") or 0)
-        total = round(total_factura_anchor) if total_factura_anchor > 0 \
-                else sum(float(i.get("Monto / TOTAL") or 0) for i in items)
-        if es_boleta:
-            info_caja = await asyncio.to_thread(consultar_saldo_caja)
-            saldo_txt = f"💰 Saldo caja chica: *${info_caja['saldo']:,.0f}*"
-            alerta = "\n⚠️ Saldo bajo!" if info_caja['saldo'] < 100000 else ""
-            await query.edit_message_text(
-                f"✅ *Boleta guardada (Caja Chica)*\n\n🏪 {_esc(proveedor)}\n🧾 Nº {_esc(nro)}  —  📤 ${total:,.0f}\n"
-                f"{saldo_txt}{alerta}\n\n_Usa /deshacer si hay algún error_",
-                parse_mode="Markdown")
-        else:
-            await query.edit_message_text(
-                f"✅ *Factura guardada*\n\n🏢 {_esc(proveedor)}\n📄 Nº {_esc(nro)}  —  💰 ${total:,.0f}\n"
-                f"📊 {len(items)} fila(s) en el Excel\n\n_Usa /deshacer si hay algún error_",
-                parse_mode="Markdown")
-    else:
-        await query.edit_message_text("❌ Error al guardar. ¿Está el Excel abierto en otro programa?")
 
 async def cb_cancel_save(update, context):
     query = update.callback_query; await query.answer()
