@@ -199,6 +199,103 @@ def categorize_bank_movement(row: int, excel_path=None, cache_path=None) -> dict
 SAVE_EVERY = 25  # filas entre cada guardado del Master
 
 
+def _categorize_bank_row_in_ws(ws, row: int, cache) -> dict:
+    """Categoriza fila de Cuenta Banco en memoria. No abre ni guarda archivo."""
+    data = _read_bank_row(ws, row)
+
+    if data["abono"] > 0 and data["cargo"] == 0:
+        result = {
+            "tipo": "ingreso", "categoria": "", "cultivo": "",
+            "confianza": 1.0, "razon": "abono detectado",
+        }
+    else:
+        cached = cache.get(data["descripcion"], data["referencia"])
+        if cached:
+            base = cached
+        else:
+            base = categorize_raw(
+                proveedor=data["descripcion"], glosa=data["referencia"],
+                glosa_ii="", monto=data["cargo"], fecha=data["fecha"],
+            )
+            cache.set(data["descripcion"], data["referencia"], base)
+        result = {**base, "tipo": "egreso"}
+
+    ws.cell(row, COL_BANCO_TIPO, result["tipo"])
+    if result["tipo"] != "ingreso":
+        cat = result["categoria"]
+        if result["confianza"] < CONFIANZA_REVISAR:
+            cat = "REVISAR"
+        ws.cell(row, COL_BANCO_CATEGORIA, cat)
+        ws.cell(row, COL_BANCO_CULTIVO, result["cultivo"])
+
+    return result
+
+
+def batch_categorize_bank_movements(excel_path=None, cache_path=None,
+                                      limit: int | None = None,
+                                      progress_cb=None,
+                                      save_every: int = SAVE_EVERY) -> dict:
+    """Itera Cuenta Banco, categoriza cargos sin Tipo.
+
+    Optimizado: abre Master una sola vez, guarda cada `save_every` filas.
+    Equivalente bancario de `batch_categorize_history`.
+    """
+    excel_path = excel_path or EXCEL_PATH
+    cache = _get_cache(cache_path)
+
+    wb = load_workbook(excel_path)
+    ws = wb[CUENTA_BANCO_SHEET]
+
+    pending_rows = []
+    for r in range(2, ws.max_row + 1):
+        if ws.cell(r, 1).value is None:  # fecha vacia
+            continue
+        try:
+            cargo = float(ws.cell(r, 4).value or 0)
+        except (TypeError, ValueError):
+            continue
+        if cargo <= 0:
+            continue
+        if ws.cell(r, COL_BANCO_TIPO).value:  # ya categorizado
+            continue
+        pending_rows.append(r)
+
+    if limit is not None:
+        pending_rows = pending_rows[:limit]
+
+    report = {
+        "total_pending": len(pending_rows),
+        "processed": 0, "low_confidence": 0, "errors": 0,
+    }
+
+    since_last_save = 0
+    for idx, row in enumerate(pending_rows, 1):
+        try:
+            result = _categorize_bank_row_in_ws(ws, row, cache)
+            report["processed"] += 1
+            if result.get("confianza", 1.0) < CONFIANZA_REVISAR:
+                report["low_confidence"] += 1
+            since_last_save += 1
+        except Exception as e:
+            logger.error(f"Error banco fila {row}: {e}")
+            report["errors"] += 1
+
+        if since_last_save >= save_every:
+            _save_wb(wb, excel_path)
+            since_last_save = 0
+            logger.info(f"Checkpoint banco: {idx}/{len(pending_rows)}")
+
+        if progress_cb:
+            progress_cb(idx, len(pending_rows))
+
+    if since_last_save > 0:
+        _save_wb(wb, excel_path)
+    wb.close()
+
+    logger.info(f"Batch categorize banco OK: {report}")
+    return report
+
+
 def batch_categorize_history(excel_path=None, cache_path=None,
                                limit: int | None = None,
                                progress_cb=None,

@@ -15,7 +15,8 @@ from flask import Flask, render_template, jsonify, request
 from dashboard_data import get_dashboard_data, get_facturas_summary, get_comparacion_anual, \
     get_costos_por_cultivo, get_exportaciones, get_caja_chica, get_cuenta_banco, \
     get_inventario_resumen, get_personal_resumen, get_tareas_resumen, \
-    get_facturas_detalle, get_movimientos_banco
+    get_facturas_detalle, get_movimientos_banco, \
+    get_banco_revisar, update_banco_categoria, BANCO_CATEGORIAS_VALIDAS
 from modules.cash_flow.projector import get_cash_flow
 from modules.cash_flow.replante import afford_check
 
@@ -153,6 +154,31 @@ def api_replante():
         costo_por_hc=float(body.get("costo_por_hc", 5_000_000)),
     )
     return jsonify(result)
+
+
+@app.route("/banco/revisar")
+def banco_revisar_page():
+    return render_template("banco_revisar.html",
+                            categorias=BANCO_CATEGORIAS_VALIDAS)
+
+
+@app.route("/api/banco/revisar")
+def api_banco_revisar():
+    return jsonify(get_banco_revisar())
+
+
+@app.route("/api/banco/revisar/<int:fila>", methods=["POST"])
+def api_banco_revisar_update(fila):
+    body = request.get_json() or {}
+    categoria = body.get("categoria", "")
+    cultivo = body.get("cultivo", "GENERAL")
+    if not categoria:
+        return jsonify({"error": "categoria requerida"}), 400
+    try:
+        result = update_banco_categoria(fila, categoria, cultivo)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":

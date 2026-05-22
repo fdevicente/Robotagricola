@@ -182,6 +182,64 @@ def get_movimientos_banco():
     return filas
 
 
+def get_banco_revisar():
+    """Retorna cargos con Categoria=REVISAR para revision manual.
+
+    Columnas Cuenta Banco: A=fecha, B=descripcion, C=referencia, D=cargo,
+    E=abono, F=saldo, G=tipo, H=categoria, I=cultivo
+    """
+    wb = _open_wb()
+    if "Cuenta Banco" not in wb.sheetnames:
+        wb.close()
+        return []
+    ws = wb["Cuenta Banco"]
+    filas = []
+    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        if not row[0]:
+            continue
+        # Categoria col H = index 7
+        categoria = row[7] if len(row) > 7 else None
+        if categoria != "REVISAR":
+            continue
+        filas.append({
+            "fila": idx,
+            "fecha": str(row[0] or "")[:10],
+            "descripcion": str(row[1] or ""),
+            "referencia": str(row[2] or ""),
+            "cargo": _safe_float(row[3]),
+            "tipo": str(row[6] or "") if len(row) > 6 else "",
+            "categoria": str(categoria or ""),
+            "cultivo": str(row[8] or "") if len(row) > 8 else "",
+        })
+    wb.close()
+    filas.sort(key=lambda x: x["cargo"], reverse=True)
+    return filas
+
+
+BANCO_CATEGORIAS_VALIDAS = [
+    "Fertilizantes", "Fitosanitarios", "Maquinaria - mantencion",
+    "Mano de obra temporal", "Mano de obra planta", "Combustible",
+    "Riego", "Inversion / Replante", "Servicios profesionales",
+    "Arriendos / Patentes / Seguros", "Caja chica / Imprevistos",
+    "SERVICIOS DE EXPORTACION", "INSUMOS AGRICOLAS", "TRANSPORTE",
+    "ENERGIA", "COSTO ENERGETICO", "HERRAMIENTAS", "SUMINISTROS",
+    "MATERIALES", "SEGURIDAD", "MANTENIMIENTO", "CAMBIO DIVISA",
+    "AGUA", "ALIMENTACION", "ARRIENDOS", "SERVICIOS",
+]
+
+
+def update_banco_categoria(fila: int, categoria: str, cultivo: str = "GENERAL"):
+    """Actualiza Categoria/Cultivo de una fila de Cuenta Banco."""
+    from openpyxl import load_workbook as _lw
+    wb = _lw(EXCEL_PATH)
+    ws = wb["Cuenta Banco"]
+    ws.cell(fila, 8).value = categoria
+    ws.cell(fila, 9).value = cultivo
+    wb.save(EXCEL_PATH)
+    wb.close()
+    return {"ok": True, "fila": fila, "categoria": categoria}
+
+
 # ─── COSTOS POR CULTIVO ────────────────────────────────────
 
 def get_costos_por_cultivo():

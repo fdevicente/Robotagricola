@@ -1,11 +1,25 @@
 # Handoff — Bot Agrícola Santa Elisa
 
-**Fecha:** 2026-05-22
-**Estado:** ✅ Bot funcional + refactor completo + cash flow operativo
+**Fecha:** 2026-05-22 (actualizado post-categorización)
+**Estado:** ✅ Bot funcional + refactor + cash flow + categorización banco 99.2%
 
 ---
 
-## Lo que hicimos en esta conversación
+## Sesión 2026-05-22 (categorización exhaustiva)
+
+- **Facturas REVISAR:** 293 → 0
+- **Banco REVISAR:** 3,004 → 23 (99.2%) — quedan $209K residual de montos chicos
+- **Pre-2021** marcadas como `PRE-2021 HISTORICO` (1,427 movs, fuera del análisis)
+- **Bug arreglado:** `categorize_bank_movement` corrompía Excel → nueva función batch `batch_categorize_bank_movements` en `modules/cash_flow/categorizer.py` (integrada en `daily_banco_18h.py`)
+- **Vista dashboard nueva:** `/banco/revisar` (templates/banco_revisar.html + endpoints en dashboard.py)
+- **30+ categorías** creadas y normalizadas a MAYÚSCULAS (ver `memory/project_categorizacion_banco.md`)
+- **Cruce:** `Dropbox/Agricola Santa Elisa/FXP.xlsx` pestaña `ScotiaBCO` cols `Asig Cta` + `Notas` por (fecha, monto)
+- Scripts en `Robot/`: `apply_rules_v3..v8.py`, `bulk_recategorize.py`, `apply_fxp_asig.py`
+- Backups generados: `MASTER_PRE_*.xlsx`
+
+---
+
+## Sesión original (Plan 1-6)
 
 ### Plan 1-6 (Cash Flow Fase 1) — ✅ COMPLETO
 

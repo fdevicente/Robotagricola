@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Revisar Cargos Banco — Agrícola Santa Elisa</title>
+<style>
+body { font-family: -apple-system, Arial, sans-serif; margin: 0; background: #f5f5f5; }
+.header { background: #2c3e50; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; }
+.header h1 { margin: 0; font-size: 20px; }
+.stats { font-size: 14px; }
+.container { padding: 20px; max-width: 1400px; margin: 0 auto; }
+.filters { background: white; padding: 12px 16px; margin-bottom: 16px; border-radius: 6px; display: flex; gap: 12px; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.filters input { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; }
+.row-card { background: white; padding: 12px 16px; margin-bottom: 8px; border-radius: 6px; display: grid; grid-template-columns: 90px 1fr 100px 240px 90px; gap: 12px; align-items: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+.row-card.done { opacity: 0.4; }
+.fecha { font-size: 12px; color: #666; }
+.desc { font-size: 13px; }
+.desc small { color: #888; display: block; font-size: 11px; }
+.monto { font-weight: bold; color: #c0392b; text-align: right; }
+.cat-select { padding: 5px; border: 1px solid #bbb; border-radius: 4px; font-size: 12px; width: 100%; }
+.btn-save { padding: 6px 12px; background: #27ae60; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
+.btn-save:hover { background: #219955; }
+.btn-save:disabled { background: #ccc; cursor: not-allowed; }
+.loading { text-align: center; padding: 40px; color: #888; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Revisar Cargos Banco — REVISAR</h1>
+  <div class="stats" id="stats">Cargando...</div>
+</div>
+<div class="container">
+  <div class="filters">
+    <input id="search" type="text" placeholder="Filtrar por descripción/referencia..." style="flex:1">
+    <label><input id="hideDone" type="checkbox" checked> Ocultar revisados</label>
+    <span id="counter" style="color:#666"></span>
+  </div>
+  <div id="list" class="loading">Cargando cargos...</div>
+</div>
+<script>
+const CATEGORIAS = {{ categorias | tojson }};
+let data = [];
+const done = new Set();
+
+async function load() {
+  const res = await fetch('/api/banco/revisar');
+  data = await res.json();
+  document.getElementById('stats').textContent =
+    `${data.length} cargos | $${data.reduce((s,r)=>s+r.cargo,0).toLocaleString('es-CL')} CLP`;
+  render();
+}
+
+function fmt(n) { return '$' + Math.round(n).toLocaleString('es-CL'); }
+
+function render() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const hide = document.getElementById('hideDone').checked;
+  const filtered = data.filter(r => {
+    if (hide && done.has(r.fila)) return false;
+    if (!q) return true;
+    return (r.descripcion + ' ' + r.referencia).toLowerCase().includes(q);
+  });
+  document.getElementById('counter').textContent =
+    `Mostrando ${filtered.length} de ${data.length}`;
+
+  const html = filtered.map(r => {
+    const opts = CATEGORIAS.map(c => `<option value="${c}">${c}</option>`).join('');
+    return `<div class="row-card ${done.has(r.fila) ? 'done' : ''}" data-fila="${r.fila}">
+      <div class="fecha">${r.fecha}</div>
+      <div class="desc">${r.descripcion}<small>${r.referencia}</small></div>
+      <div class="monto">${fmt(r.cargo)}</div>
+      <select class="cat-select">${opts}</select>
+      <button class="btn-save" onclick="save(${r.fila}, this)">Guardar</button>
+    </div>`;
+  }).join('');
+  document.getElementById('list').innerHTML = html || '<p style="text-align:center;color:#888;padding:40px">No hay más cargos para revisar</p>';
+}
+
+async function save(fila, btn) {
+  const card = btn.closest('.row-card');
+  const cat = card.querySelector('.cat-select').value;
+  btn.disabled = true;
+  btn.textContent = '...';
+  try {
+    const res = await fetch(`/api/banco/revisar/${fila}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({categoria: cat, cultivo: 'GENERAL'})
+    });
+    if (res.ok) {
+      done.add(fila);
+      btn.textContent = '✓';
+      btn.style.background = '#95a5a6';
+      setTimeout(() => render(), 300);
+    } else {
+      const err = await res.json();
+      alert('Error: ' + (err.error || 'desconocido'));
+      btn.disabled = false;
+      btn.textContent = 'Guardar';
+    }
+  } catch(e) {
+    alert('Error de red: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = 'Guardar';
+  }
+}
+
+document.getElementById('search').addEventListener('input', render);
+document.getElementById('hideDone').addEventListener('change', render);
+load();
+</script>
+</body>
+</html>
