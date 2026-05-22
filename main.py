@@ -57,107 +57,7 @@ from utils.formatting import esc as _esc, format_date as _format_date, calc_venc
 from handlers.facturas import _registrar_correccion
 
 
-def _build_preview(items):
-    lines = ["📋 *Datos extraídos — revisa antes de guardar:*\n"]
-    first = items[0]
-    fecha_venc = first.get("Fecha Vencimiento") or _calc_vencimiento(first.get("Fecha Emision"))
-
-    # Cabecera (datos comunes)
-    lines.append(f"🏢 *Proveedor:* {_esc(first.get('Nombre Factura / Proveedor') or '? no detectado')}")
-    lines.append(f"🪪 *RUT:* {_esc(first.get('Rut') or '? no detectado')}")
-    doc_tipo = _esc(first.get('Documento') or '—')
-    doc_nro = _esc(first.get('Numero Factura / Nro Documento') or '—')
-    lines.append(f"📄 *Documento:* {doc_tipo}  Nº {doc_nro}")
-    # Referencia para NC/ND
-    ref = first.get("Referencia Factura")
-    if ref:
-        lines.append(f"🔗 *Ref. Factura:* Nº {_esc(ref)}")
-    lines.append(f"📅 *Emisión:* {_format_date(first.get('Fecha Emision'))}   ⏰ *Vence:* {_format_date(fecha_venc)}\n")
-
-    # Determinar régimen de IVA
-    doc = str(first.get('Documento') or '').lower()
-    es_honorario = "boleta de honorario" in doc
-    exenta = any(k in doc for k in ('exenta', 'exento', 'no afecta', 'no afecto')) or es_honorario
-
-    # Pasada 1: acumular pesos (unit×qty) e impuesto específico
-    pesos = []
-    total_imp_esp = 0.0
-    for item in items:
-        unitario = float(item.get('Valor unitario') or 0)
-        cantidad = float(item.get('Cantidad') or 1)
-        pesos.append(unitario * cantidad)
-        total_imp_esp += float(item.get('Impuesto Especifico') or 0)
-    total_neto_raw = sum(pesos)
-
-    # NETO anchor: derivado del Total Factura (hacia atrás) o fallback al raw
-    total_factura = round(float(first.get('Total Factura') or 0))
-    if total_factura > 0:
-        base_iva = total_factura - round(total_imp_esp)
-        if exenta:
-            iva_total = 0
-            neto_anchor = base_iva
-        else:
-            iva_total = round(base_iva / 1.19 * 0.19)
-            neto_anchor = base_iva - iva_total
-        total_con_iva = total_factura
-    else:
-        neto_anchor = round(total_neto_raw)
-        iva_total = 0 if exenta else round(total_neto_raw * 0.19)
-        total_con_iva = round(neto_anchor * (1.0 if exenta else 1.19) + total_imp_esp)
-
-    # Distribuir neto_anchor entre ítems — la suma SIEMPRE calza exactamente
-    n = len(items)
-    netos_linea = [0] * n
-    if n > 0:
-        if total_neto_raw > 0:
-            acumulado = 0
-            for i, peso in enumerate(pesos):
-                if i == n - 1:
-                    netos_linea[i] = neto_anchor - acumulado  # último absorbe el residuo
-                else:
-                    val = round(neto_anchor * peso / total_neto_raw)
-                    netos_linea[i] = val
-                    acumulado += val
-        else:
-            # Fallback uniforme si no hay pesos
-            base = neto_anchor // n
-            for i in range(n):
-                netos_linea[i] = base
-            netos_linea[-1] += neto_anchor - base * n
-
-    # Pasada 2: renderizar ítems con netos ajustados
-    for i, item in enumerate(items, 1):
-        unitario = float(item.get('Valor unitario') or 0)
-        cantidad = float(item.get('Cantidad') or 1)
-        neto_linea = netos_linea[i - 1]
-
-        if n > 1:
-            lines.append(f"*— Ítem {i} —*")
-        lines.append(f"📦 *Glosa:* {_esc(item.get('Detalle / Glosa') or '? no detectado')}")
-        if item.get('Glosa II'):
-            lines.append(f"📝 *Detalle:* {_esc(item.get('Glosa II'))}")
-        lines.append(f"🔢 *Cantidad:* {cantidad:g}   💲 *Unit neto:* ${unitario:,.3f}")
-        lines.append(f"💵 *Neto línea:* ${neto_linea:,.0f}\n")
-
-    # Totales
-    if es_honorario:
-        # Boleta de Honorarios: neto_anchor = pago profesional; imp_esp = retención SII
-        pago_profesional = neto_anchor
-        retencion = round(total_imp_esp)
-        costo_total = total_con_iva if total_factura > 0 else pago_profesional + retencion
-        lines.append(f"💵 *Pago al profesional:* ${pago_profesional:,.0f}")
-        if retencion:
-            lines.append(f"🏦 *Impto. Retenido (ASE→SII):* ${retencion:,.0f}")
-        lines.append(f"💰 *COSTO TOTAL:* ${costo_total:,.0f}\n")
-    else:
-        lines.append(f"📊 *NETO:* ${neto_anchor:,.0f}")
-        if not exenta:
-            lines.append(f"📊 *IVA 19%:* ${iva_total:,.0f}")
-        if total_imp_esp:
-            lines.append(f"⛽ *Imp. Específico:* ${total_imp_esp:,.0f}")
-        lines.append(f"💰 *TOTAL:* ${total_con_iva:,.0f}\n")
-    lines.append("¿Qué deseas hacer?")
-    return "\n".join(lines)
+from handlers.facturas import _build_preview
 
 from utils.keyboards import (
     main_keyboard as _main_keyboard,
@@ -324,9 +224,7 @@ async def _process_and_reply(update, context, status_msg, file_path):
         # Fallback sin Markdown si hay caracteres problemáticos
         await status_msg.edit_text(preview, reply_markup=_main_keyboard())
 
-async def _show_preview(query, context):
-    items = context.user_data.get("pending_items", [])
-    await query.edit_message_text(_build_preview(items), parse_mode="Markdown", reply_markup=_main_keyboard())
+from handlers.facturas import _show_preview
 
 # ── CALLBACKS ─────────────────────────────────
 async def cb_confirm_save(update, context):
