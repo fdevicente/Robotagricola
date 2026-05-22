@@ -627,3 +627,142 @@ async def cb_del_item_confirm(update, context):
             for it in items:
                 it["Total Factura"] = nuevo_tf
     await _show_preview(query, context)
+
+
+# ── Flujo de edición por texto ───────────────────
+
+
+async def handle_text_edit_factura(update, context) -> bool:
+    """Procesa texto si hay edicion de factura pendiente. True si lo manejó."""
+    campo = context.user_data.get("editing_field")
+    if not campo:
+        return False
+
+    nuevo = update.message.text.strip()
+    items = context.user_data.get("pending_items", [])
+    if not items:
+        await update.message.reply_text("⚠️ No hay factura pendiente.")
+        return True
+
+    idx = context.user_data.get("editing_item_idx")
+
+    if campo == "_total_factura":
+        try:
+            n = nuevo.replace("$", "").replace(" ", "")
+            if "," in n:
+                n = n.replace(".", "").replace(",", ".")
+            elif n.count(".") > 1:
+                n = n.replace(".", "")
+            total_nuevo = float(n)
+        except ValueError:
+            await update.message.reply_text(
+                f"❌ '{nuevo}' no es un número válido. Intenta de nuevo.")
+            return True
+        valor_orig_tf = items[0].get("Total Factura") or items[0].get("Monto / TOTAL")
+        _registrar_correccion(items[0], "Total Factura", valor_orig_tf, total_nuevo)
+        doc = str(items[0].get("Documento") or "").lower()
+        exenta = any(k in doc for k in ("exenta", "exento", "no afecta", "no afecto"))
+        iva_factor = 1.0 if exenta else 1.19
+        neto_nuevo = total_nuevo / iva_factor
+        total_neto_actual = sum(float(i.get("Valor unitario") or 0) * float(i.get("Cantidad") or 1)
+                                  for i in items)
+        if total_neto_actual > 0:
+            factor = neto_nuevo / total_neto_actual
+            for item in items:
+                unit = float(item.get("Valor unitario") or 0)
+                qty = float(item.get("Cantidad") or 1)
+                nuevo_unit = round(unit * factor, 2)
+                item["Valor unitario"] = nuevo_unit
+                item["Monto / TOTAL"] = round(nuevo_unit * qty * iva_factor)
+        else:
+            items[0]["Monto / TOTAL"] = total_nuevo
+            items[0]["Valor unitario"] = round(neto_nuevo)
+        for item in items:
+            item["Total Factura"] = round(total_nuevo)
+        context.user_data["total_override"] = total_nuevo
+        context.user_data["editing_field"] = None
+        context.user_data["editing_item_idx"] = None
+        await update.message.reply_text(
+            f"✅ *Total factura* actualizado a `${total_nuevo:,.0f}`",
+            parse_mode="Markdown")
+        try:
+            await update.message.reply_text(_build_preview(items),
+                                              parse_mode="Markdown",
+                                              reply_markup=main_keyboard())
+        except Exception:
+            await update.message.reply_text(_build_preview(items),
+                                              reply_markup=main_keyboard())
+        return True
+
+    targets = [items[idx]] if idx is not None else items
+
+    NUMERICOS = {"Valor unitario", "Cantidad", "Monto / TOTAL", "TOTAL NETO"}
+    for item in targets:
+        valor_original = item.get(campo)
+        if campo in NUMERICOS:
+            try:
+                n = nuevo.replace("$", "").replace(" ", "")
+                if "," in n:
+                    n = n.replace(".", "").replace(",", ".")
+                else:
+                    if n.count(".") > 1:
+                        n = n.replace(".", "")
+                val = float(n)
+                item[campo] = val
+                if campo == "Monto / TOTAL":
+                    qty = float(item.get("Cantidad") or 1)
+                    imp_esp = float(item.get("Impuesto Especifico") or 0)
+                    doc = str(item.get("Documento") or "").lower()
+                    sin_iva = any(k in doc for k in ("exenta", "exento", "no afecta",
+                                                       "no afecto", "boleta de honorario"))
+                    iva_factor = 1.0 if sin_iva else 1.19
+                    neto_nuevo = (val - imp_esp) / iva_factor
+                    item["Valor unitario"] = neto_nuevo / qty if qty else 0
+                elif campo == "TOTAL NETO":
+                    qty = float(item.get("Cantidad") or 1)
+                    imp_esp = float(item.get("Impuesto Especifico") or 0)
+                    doc = str(item.get("Documento") or "").lower()
+                    sin_iva = any(k in doc for k in ("exenta", "exento", "no afecta",
+                                                       "no afecto", "boleta de honorario"))
+                    iva_factor = 1.0 if sin_iva else 1.19
+                    item["Valor unitario"] = val / qty if qty else 0
+                    item["Monto / TOTAL"] = round(val * iva_factor + imp_esp)
+            except ValueError:
+                await update.message.reply_text(
+                    f"❌ '{nuevo}' no es un número válido. Intenta de nuevo.")
+                return True
+        else:
+            item[campo] = nuevo
+        if str(valor_original) != str(item.get(campo)):
+            _registrar_correccion(item, campo, valor_original, item.get(campo))
+
+    if campo in NUMERICOS:
+        doc0 = str(items[0].get("Documento") or "").lower()
+        sin_iva0 = any(k in doc0 for k in ("exenta", "exento", "no afecta",
+                                            "no afecto", "boleta de honorario"))
+        iva_factor0 = 1.0 if sin_iva0 else 1.19
+        if campo not in ("Monto / TOTAL", "TOTAL NETO"):
+            for it in targets:
+                u = float(it.get("Valor unitario") or 0)
+                q = float(it.get("Cantidad") or 1)
+                imp = float(it.get("Impuesto Especifico") or 0)
+                it["Monto / TOTAL"] = round(u * q * iva_factor0 + imp)
+        nuevo_tf = round(sum(float(it.get("Monto / TOTAL") or 0) for it in items))
+        if nuevo_tf > 0:
+            for it in items:
+                it["Total Factura"] = nuevo_tf
+
+    context.user_data["editing_field"] = None
+    context.user_data["editing_item_idx"] = None
+    label = context.user_data.get("editing_field_label", campo)
+    suffix = f" (Ítem {idx+1})" if idx is not None else ""
+    await update.message.reply_text(f"✅ *{label}*{suffix} actualizado.",
+                                      parse_mode="Markdown")
+    try:
+        await update.message.reply_text(_build_preview(items),
+                                          parse_mode="Markdown",
+                                          reply_markup=main_keyboard())
+    except Exception:
+        await update.message.reply_text(_build_preview(items),
+                                          reply_markup=main_keyboard())
+    return True
