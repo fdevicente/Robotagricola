@@ -417,3 +417,213 @@ async def _guardar_excel(query, context, items, file_path):
     else:
         await query.edit_message_text(
             "❌ Error al guardar. ¿Está el Excel abierto en otro programa?")
+
+
+# ── Callbacks de edición ─────────────────────────
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from utils.keyboards import edit_keyboard
+
+
+async def cb_confirm_save(update, context):
+    query = update.callback_query
+    await query.answer()
+    items = context.user_data.get("pending_items", [])
+    file_path = context.user_data.get("pending_file_path")
+    if not items:
+        await query.edit_message_text("⚠️ No hay datos pendientes.")
+        return
+
+    first = items[0]
+    nombre = first.get("Nombre Factura / Proveedor")
+    rut = first.get("Rut")
+    if nombre and rut and not _rut_existe(rut):
+        context.user_data["nuevo_proveedor_nombre"] = nombre
+        context.user_data["nuevo_proveedor_rut"] = rut
+        await query.edit_message_text(
+            f"🆕 *{nombre}* (RUT: {rut}) no está en tu lista de proveedores.\n\n¿Lo agregamos?",
+            parse_mode="Markdown", reply_markup=proveedor_nuevo_keyboard())
+        return
+    await _guardar_excel(query, context, items, file_path)
+
+
+async def cb_add_proveedor_yes(update, context):
+    query = update.callback_query
+    await query.answer()
+    nombre = context.user_data.get("nuevo_proveedor_nombre")
+    rut = context.user_data.get("nuevo_proveedor_rut")
+    if nombre and rut:
+        ok = await asyncio.to_thread(_agregar_proveedor, nombre, rut)
+        if not ok:
+            await query.answer("⚠️ No se pudo agregar", show_alert=True)
+    await _guardar_excel(query, context,
+                          context.user_data.get("pending_items", []),
+                          context.user_data.get("pending_file_path"))
+
+
+async def cb_add_proveedor_no(update, context):
+    query = update.callback_query
+    await query.answer()
+    await _guardar_excel(query, context,
+                          context.user_data.get("pending_items", []),
+                          context.user_data.get("pending_file_path"))
+
+
+async def cb_cancel_save(update, context):
+    query = update.callback_query
+    await query.answer()
+    context.user_data["pending_items"] = []
+    await query.edit_message_text("🚫 Factura descartada. Mándame otra cuando quieras.")
+
+
+async def cb_edit_menu(update, context):
+    query = update.callback_query
+    await query.answer()
+    context.user_data["editing_field"] = None
+    context.user_data["editing_item_idx"] = None
+    items = context.user_data.get("pending_items", [])
+    sufijo = "s" if len(items) != 1 else ""
+    texto = f"✏️ *¿Qué campo quieres corregir?* ({len(items)} ítem{sufijo})"
+    await query.edit_message_text(texto, parse_mode="Markdown",
+                                    reply_markup=edit_keyboard(items))
+
+
+async def cb_edit_field(update, context):
+    query = update.callback_query
+    await query.answer()
+    campo_key = query.data
+    campo_excel, campo_label = CAMPOS_EDITABLES[campo_key]
+    items = context.user_data.get("pending_items", [])
+
+    if len(items) > 1 and campo_key in CAMPOS_POR_ITEM:
+        buttons = []
+        for i, item in enumerate(items):
+            glosa = _esc(item.get("Detalle / Glosa") or f"Ítem {i+1}")[:30]
+            buttons.append([InlineKeyboardButton(
+                f"Ítem {i+1}: {glosa}", callback_data=f"selitem_{i}_{campo_key}")])
+        buttons.append([InlineKeyboardButton("« Volver", callback_data="edit_menu")])
+        await query.edit_message_text(
+            f"✏️ *{campo_label}* — ¿En qué ítem?",
+            parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(buttons))
+        return
+
+    context.user_data["editing_field"] = campo_excel
+    context.user_data["editing_field_label"] = campo_label
+    context.user_data["editing_item_idx"] = None
+    _back_btn = InlineKeyboardMarkup([[InlineKeyboardButton("« Volver", callback_data="edit_menu")]])
+    await query.edit_message_text(
+        f"✏️ Escribe el nuevo valor para *{campo_label}*:",
+        parse_mode="Markdown", reply_markup=_back_btn)
+
+
+async def cb_select_item(update, context):
+    query = update.callback_query
+    await query.answer()
+    parts = query.data.split("_")  # selitem_0_edit_glosa
+    idx = int(parts[1])
+    campo_key = "_".join(parts[2:])
+    campo_excel, campo_label = CAMPOS_EDITABLES[campo_key]
+    items = context.user_data.get("pending_items", [])
+    glosa = _esc(items[idx].get("Detalle / Glosa") or f"Ítem {idx+1}")[:30]
+
+    context.user_data["editing_field"] = campo_excel
+    context.user_data["editing_field_label"] = campo_label
+    context.user_data["editing_item_idx"] = idx
+    _back_btn = InlineKeyboardMarkup([[InlineKeyboardButton("« Volver", callback_data="edit_menu")]])
+    await query.edit_message_text(
+        f"✏️ Escribe el nuevo valor para *{campo_label}* (Ítem {idx+1}: {glosa}):",
+        parse_mode="Markdown", reply_markup=_back_btn)
+
+
+async def cb_edit_total_factura(update, context):
+    query = update.callback_query
+    await query.answer()
+    items = context.user_data.get("pending_items", [])
+    total_neto = sum(float(i.get("Valor unitario") or 0) * float(i.get("Cantidad") or 1)
+                      for i in items)
+    total_actual = round(total_neto * 1.19)
+    context.user_data["editing_field"] = "_total_factura"
+    context.user_data["editing_field_label"] = "💰 TOTAL FACTURA"
+    context.user_data["editing_item_idx"] = None
+    _back_btn = InlineKeyboardMarkup([[InlineKeyboardButton("« Volver", callback_data="edit_menu")]])
+    await query.edit_message_text(
+        f"💰 *Total factura actual:* ${total_actual:,.0f}\n\n"
+        f"Escribe el nuevo *total con IVA* de toda la factura:",
+        parse_mode="Markdown", reply_markup=_back_btn)
+
+
+async def cb_back_preview(update, context):
+    query = update.callback_query
+    await query.answer()
+    await _show_preview(query, context)
+
+
+async def cb_add_item(update, context):
+    """Agrega un item vacio a la factura pendiente."""
+    query = update.callback_query
+    await query.answer()
+    items = context.user_data.get("pending_items", [])
+    if not items:
+        await query.edit_message_text("⚠️ No hay factura pendiente.")
+        return
+    first = items[0]
+    COMUNES = ("Fecha Emision", "Fecha Vencimiento", "Fecha Pago",
+               "Nombre Factura / Proveedor", "Rut", "Documento",
+               "Numero Factura / Nro Documento", "Referencia Factura",
+               "Total Factura")
+    nuevo = {k: first.get(k) for k in COMUNES}
+    nuevo["Detalle / Glosa"] = ""
+    nuevo["Glosa II"] = ""
+    nuevo["Valor unitario"] = 0
+    nuevo["Cantidad"] = 1
+    nuevo["Impuesto Especifico"] = 0
+    nuevo["Monto / TOTAL"] = 0
+    items.append(nuevo)
+    context.user_data["pending_items"] = items
+    idx = len(items)
+    context.user_data["editing_field"] = "Detalle / Glosa"
+    context.user_data["editing_field_label"] = "📦 Glosa / descripción corta"
+    context.user_data["editing_item_idx"] = idx - 1
+    _back_btn = InlineKeyboardMarkup([[InlineKeyboardButton("« Volver", callback_data="edit_menu")]])
+    await query.edit_message_text(
+        f"➕ *Ítem {idx} agregado*\n\n"
+        f"Escribe la *glosa / descripción* del nuevo ítem\n"
+        f"(luego podrás editar Cantidad, Unit neto y Total ítem con el menú de edición):",
+        parse_mode="Markdown", reply_markup=_back_btn)
+
+
+async def cb_del_item_menu(update, context):
+    query = update.callback_query
+    items = context.user_data.get("pending_items", [])
+    if len(items) <= 1:
+        await query.answer("⚠️ No puedes eliminar el único ítem.", show_alert=True)
+        return
+    await query.answer()
+    buttons = []
+    for i, item in enumerate(items):
+        glosa = _esc(item.get("Detalle / Glosa") or f"Ítem {i+1}")[:30]
+        buttons.append([InlineKeyboardButton(
+            f"🗑️ Ítem {i+1}: {glosa}", callback_data=f"delitem_{i}")])
+    buttons.append([InlineKeyboardButton("« Volver", callback_data="edit_menu")])
+    await query.edit_message_text(
+        "🗑️ *¿Qué ítem quieres eliminar?*",
+        parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(buttons))
+
+
+async def cb_del_item_confirm(update, context):
+    query = update.callback_query
+    await query.answer()
+    try:
+        idx = int(query.data.split("_")[1])
+    except (ValueError, IndexError):
+        await query.edit_message_text("❌ Índice de ítem inválido.")
+        return
+    items = context.user_data.get("pending_items", [])
+    if 0 <= idx < len(items):
+        items.pop(idx)
+        context.user_data["pending_items"] = items
+        nuevo_tf = round(sum(float(it.get("Monto / TOTAL") or 0) for it in items))
+        if nuevo_tf > 0:
+            for it in items:
+                it["Total Factura"] = nuevo_tf
+    await _show_preview(query, context)
