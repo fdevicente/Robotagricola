@@ -7,6 +7,7 @@ from datetime import date, datetime
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from config import EXCEL_PATH
+from excel_manager import _save_wb  # guardado con reintentos si Excel está abierto
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ def crear_hojas_inventario():
     wb = _open_wb()
     _ensure_inventario(wb)
     _ensure_aplicaciones(wb)
-    wb.save(EXCEL_PATH)
+    _save_wb(wb)
 
 
 def _find_producto(ws, producto: str):
@@ -90,12 +91,12 @@ def agregar_stock(producto: str, cantidad: float, categoria: str = "Otro",
         nuevo_stock = stock_actual + cantidad
         ws.cell(row=row_idx, column=4).value = nuevo_stock
         ws.cell(row=row_idx, column=6).value = hoy
-        wb.save(EXCEL_PATH)
+        _save_wb(wb)
         return {"producto": producto, "stock_anterior": stock_actual,
                 "agregado": cantidad, "stock_nuevo": nuevo_stock, "nuevo": False}
     else:
         ws.append([producto, categoria, unidad, cantidad, 0, hoy, ""])
-        wb.save(EXCEL_PATH)
+        _save_wb(wb)
         return {"producto": producto, "stock_anterior": 0,
                 "agregado": cantidad, "stock_nuevo": cantidad, "nuevo": True}
 
@@ -127,7 +128,7 @@ def registrar_uso(producto: str, cantidad: float, cultivo: str,
         sector, responsable, observaciones
     ])
 
-    wb.save(EXCEL_PATH)
+    _save_wb(wb)
     alerta = nuevo_stock <= float(ws_inv.cell(row=row_idx, column=5).value or 0) if row_idx else True
     return {
         "producto": producto, "cantidad": cantidad, "unidad": unidad,

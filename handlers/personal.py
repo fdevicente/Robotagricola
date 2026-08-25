@@ -162,7 +162,8 @@ async def job_vacaciones_mensuales(context: ContextTypes.DEFAULT_TYPE):
     """Job mensual: acumula días de vacaciones a cada trabajador."""
     try:
         result = await asyncio.to_thread(actualizar_dias_mensuales)
-        chat_id = context.bot_data.get("banco_chat_id") or TELEGRAM_CHAT_ID
+        chat_id = (context.bot_data.get("owner_chat_id")
+                   or context.bot_data.get("banco_chat_id") or TELEGRAM_CHAT_ID)
         if chat_id:
             await context.bot.send_message(
                 chat_id=int(chat_id),

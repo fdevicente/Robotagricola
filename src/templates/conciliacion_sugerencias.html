@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Sugerencias de Conciliación — Agrícola Santa Elisa</title>
+<style>
+* { box-sizing: border-box; }
+body { font-family: -apple-system, "Segoe UI", Arial, sans-serif; margin: 0; background: #f4f6f8; color: #2f3b45; }
+a { color: #16a394; text-decoration: none; }
+.top { background: #fff; border-bottom: 1px solid #e3e8ec; padding: 10px 24px; display: flex; align-items: center; gap: 22px; }
+.top .logo { background: #16a394; color: #fff; font-weight: 700; border-radius: 6px; padding: 6px 10px; }
+.top nav a { margin-right: 16px; color: #5b6b77; font-size: 14px; }
+.top nav a.act { color: #16a394; border-bottom: 3px solid #16a394; padding-bottom: 12px; }
+.wrap { max-width: 1250px; margin: 0 auto; padding: 18px 24px 60px; }
+h1 { font-size: 19px; margin: 0 0 3px; }
+.sub { color: #7a8894; font-size: 13px; margin-bottom: 16px; }
+/* Filtros */
+.filtros { background: #fff; border-radius: 8px; padding: 14px 18px; box-shadow: 0 1px 3px rgba(20,40,60,.08); margin-bottom: 14px; }
+.filtros .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; align-items: end; }
+.filtros label { font-size: 12px; color: #5b6b77; display: block; margin-bottom: 3px; }
+.filtros input, .filtros select { width: 100%; padding: 7px 9px; border: 1px solid #d5dde3; border-radius: 5px; font-size: 13px; }
+.btn { border: none; border-radius: 5px; padding: 8px 16px; font-size: 13px; cursor: pointer; color: #fff; background: #16a394; }
+.btn:hover { filter: brightness(.95); }
+.btn.sec { background: #fff; color: #5b6b77; border: 1px solid #d5dde3; }
+.btn.rojo { background: #fff; color: #c0392b; border: 1px solid #eec4bd; }
+.btn:disabled { background: #c3ccd3; color: #fff; cursor: not-allowed; border-color: #c3ccd3; }
+/* Barra de acción masiva */
+.barra { display: flex; align-items: center; gap: 12px; background: #fff; border-radius: 8px; padding: 12px 18px; box-shadow: 0 1px 3px rgba(20,40,60,.08); margin-bottom: 14px; }
+.barra .cuenta { font-size: 14px; font-weight: 600; }
+.barra .der { margin-left: auto; display: flex; gap: 8px; }
+/* Tarjeta pareada */
+.par { background: #fff; border-radius: 9px; box-shadow: 0 1px 3px rgba(20,40,60,.08); margin-bottom: 12px; overflow: hidden; border-left: 4px solid #16a394; }
+.par.ia { border-left-color: #a58ad0; }
+.par.hecho { opacity: .45; }
+.par .cuerpo { display: grid; grid-template-columns: 1fr 40px 1fr; align-items: center; gap: 8px; padding: 14px 18px; }
+.lado .et { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #9aa7b1; margin-bottom: 4px; }
+.lado .ppal { font-size: 14px; font-weight: 600; line-height: 1.35; }
+.lado .meta { font-size: 12px; color: #7a8894; margin-top: 3px; }
+.lado .plata { font-size: 17px; font-weight: 700; margin-top: 5px; }
+.cargo { color: #c0392b; } .doc { color: #2f3b45; }
+.flecha { text-align: center; color: #c3ccd3; font-size: 21px; }
+.pie { display: flex; align-items: center; gap: 10px; padding: 9px 18px; background: #fafcfd; border-top: 1px solid #f0f3f5; }
+.motivo { font-size: 12px; color: #5b6b77; flex: 1; }
+.tag { display: inline-block; font-size: 10px; border-radius: 9px; padding: 2px 9px; margin-right: 7px; background: #e8f6f4; color: #12796d; }
+.tag.ia { background: #f1ecf9; color: #6b4fa0; }
+.tag.dif { background: #fdf3e0; color: #a06d00; }
+.pie .acc { display: flex; gap: 7px; }
+.pie button { border-radius: 5px; padding: 6px 14px; font-size: 12px; cursor: pointer; border: 1px solid transparent; }
+.bok { background: #16a394; color: #fff; }
+.bno { background: #fff; color: #c0392b; border-color: #eec4bd; }
+.chk { width: 16px; height: 16px; cursor: pointer; }
+.vacio { background: #fff; border-radius: 9px; padding: 46px; text-align: center; color: #8fa0ac; box-shadow: 0 1px 3px rgba(20,40,60,.08); }
+.msg { padding: 11px 16px; border-radius: 7px; margin-bottom: 14px; font-size: 13px; }
+.msg.ok { background: #e8f6f4; color: #12796d; }
+.msg.err { background: #fdecea; color: #c0392b; }
+.cargando { text-align: center; color: #8fa0ac; padding: 40px; }
+details.rech { background: #fff; border-radius: 8px; padding: 12px 18px; margin-top: 20px; box-shadow: 0 1px 3px rgba(20,40,60,.08); }
+details.rech summary { cursor: pointer; font-size: 13px; color: #5b6b77; }
+details.rech table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+details.rech td { padding: 7px 9px; border-bottom: 1px solid #f0f3f5; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="logo">ASE</div>
+  <nav>
+    <a href="/conciliacion">Conciliación</a>
+    <a href="/conciliacion/sugerencias" class="act">Sugerencias</a>
+    <a href="/general">General</a>
+    <a href="/temporadas">Temporadas</a>
+    <a href="/cash-flow">Flujo Caja</a>
+    <a href="/banco/revisar">Revisar Banco</a>
+    <a href="/reporte">Reporte</a>
+  </nav>
+</div>
+
+<div class="wrap">
+  <h1>Sugerencias de conciliación</h1>
+  <div class="sub">Cada tarjeta propone un movimiento del banco y el documento que lo respalda.
+    Lo que rechaces no se vuelve a proponer.</div>
+
+  <div id="msg"></div>
+
+  <div class="filtros">
+    <div class="grid">
+      <div><label>Desde (movimiento)</label><input type="date" id="fDesde"></div>
+      <div><label>Hasta</label><input type="date" id="fHasta"></div>
+      <div><label>Proveedor o glosa</label><input type="text" id="fProv" placeholder="ej: copeval"></div>
+      <div><label>Monto mínimo</label><input type="number" id="fMonto" placeholder="0"></div>
+      <div><label>Período</label>
+        <select id="fDias">
+          <option value="30">30 días</option>
+          <option value="90" selected>90 días</option>
+          <option value="180">180 días</option>
+          <option value="365">1 año</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" onclick="cargar()">Buscar</button>
+        <button class="btn sec" onclick="limpiar()">Limpiar</button>
+      </div>
+    </div>
+    <div style="margin-top:10px;font-size:12px;color:#7a8894">
+      <label><input type="checkbox" id="fIA" checked> Incluir las que evaluó la IA</label>
+    </div>
+  </div>
+
+  <div class="barra">
+    <input type="checkbox" class="chk" id="todas" onchange="marcarTodas(this.checked)">
+    <span class="cuenta" id="cuenta">—</span>
+    <div class="der">
+      <button class="btn rojo" id="bRechazar" onclick="rechazarSel()" disabled>Rechazar seleccionadas</button>
+      <button class="btn" id="bConciliar" onclick="conciliarSel()" disabled>Conciliar seleccionadas</button>
+    </div>
+  </div>
+
+  <div id="lista"><div class="cargando">Cargando sugerencias…</div></div>
+
+  <details class="rech" id="boxRech" style="display:none">
+    <summary><span id="nRech">0</span> sugerencias descartadas — se pueden reactivar</summary>
+    <table id="tRech"></table>
+  </details>
+</div>
+
+<script>
+let SUG = [];
+
+const fmt = n => '$' + Math.round(n || 0).toLocaleString('es-CL');
+const esc = s => String(s == null ? '' : s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function aviso(txt, tipo) {
+  document.getElementById('msg').innerHTML =
+    txt ? `<div class="msg ${tipo || 'ok'}">${esc(txt)}</div>` : '';
+}
+
+function limpiar() {
+  ['fDesde','fHasta','fProv','fMonto'].forEach(id => document.getElementById(id).value = '');
+  cargar();
+}
+
+async function cargar() {
+  document.getElementById('lista').innerHTML = '<div class="cargando">Buscando coincidencias…</div>';
+  document.getElementById('todas').checked = false;
+  const p = new URLSearchParams({
+    dias: document.getElementById('fDias').value,
+    ia: document.getElementById('fIA').checked ? '1' : '0',
+  });
+  const desde = document.getElementById('fDesde').value;
+  const hasta = document.getElementById('fHasta').value;
+  const prov  = document.getElementById('fProv').value.trim();
+  const monto = document.getElementById('fMonto').value;
+  if (desde) p.set('desde', desde);
+  if (hasta) p.set('hasta', hasta);
+  if (prov)  p.set('proveedor', prov);
+  if (monto) p.set('monto_min', monto);
+
+  try {
+    const r = await fetch('/api/conciliacion/sugerencias?' + p);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    SUG = d.sugerencias || [];
+    pintar();
+    cargarRechazos();
+  } catch (e) {
+    document.getElementById('lista').innerHTML =
+      '<div class="vacio">No pude cargar las sugerencias: ' + esc(e.message) + '</div>';
+  }
+}
+
+function pintar() {
+  const cont = document.getElementById('lista');
+  if (!SUG.length) {
+    cont.innerHTML = '<div class="vacio">No hay sugerencias con esos filtros.<br>' +
+      'Puede que ya esté todo conciliado, o que lo pendiente necesite conciliación parcial.</div>';
+    actualizarBarra();
+    return;
+  }
+  cont.innerHTML = SUG.map((s, i) => {
+    const difTag = Math.abs(s.diferencia) >= 1
+      ? `<span class="tag dif">Diferencia ${fmt(s.diferencia)}</span>` : '';
+    return `
+    <div class="par ${s.es_ia ? 'ia' : ''}" id="par${i}">
+      <div class="cuerpo">
+        <div class="lado">
+          <div class="et">Movimiento del banco · fila ${s.fila_banco}</div>
+          <div class="ppal">${esc(s.desc)}</div>
+          <div class="meta">${esc(s.fecha)}${s.categoria ? ' · ' + esc(s.categoria) : ''}</div>
+          <div class="plata cargo">${fmt(s.monto)}</div>
+        </div>
+        <div class="flecha">⇄</div>
+        <div class="lado">
+          <div class="et">Documento de respaldo</div>
+          <div class="ppal">${esc(s.prov)}</div>
+          <div class="meta">N° ${esc(s.nro)}${s.emision ? ' · emitida ' + esc(s.emision) : ''}</div>
+          <div class="plata doc">${fmt(s.total)}</div>
+        </div>
+      </div>
+      <div class="pie">
+        <input type="checkbox" class="chk sel" data-i="${i}" onchange="actualizarBarra()">
+        <div class="motivo">
+          <span class="tag ${s.es_ia ? 'ia' : ''}">${s.es_ia ? 'IA' : 'Automático'}</span>
+          ${difTag}${esc(s.motivo)}
+        </div>
+        <div class="acc">
+          <button class="bno" onclick="rechazar(${i})">Rechazar</button>
+          <button class="bok" onclick="conciliar(${i})">Conciliar</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  actualizarBarra();
+}
+
+function seleccionadas() {
+  return [...document.querySelectorAll('.sel:checked')].map(c => +c.dataset.i);
+}
+
+function marcarTodas(v) {
+  document.querySelectorAll('.sel').forEach(c => { c.checked = v; });
+  actualizarBarra();
+}
+
+function actualizarBarra() {
+  const n = seleccionadas().length;
+  const total = SUG.length;
+  document.getElementById('cuenta').textContent =
+    n ? `${n} de ${total} seleccionadas` : `${total} sugerencia${total === 1 ? '' : 's'}`;
+  document.getElementById('bConciliar').disabled = !n;
+  document.getElementById('bRechazar').disabled = !n;
+  document.getElementById('bConciliar').textContent =
+    n ? `Conciliar ${n}` : 'Conciliar seleccionadas';
+}
+
+function quitar(idxs) {
+  // se elimina de mayor a menor para no correr los índices
+  [...idxs].sort((a, b) => b - a).forEach(i => SUG.splice(i, 1));
+  pintar();
+}
+
+async function conciliar(i) { await conciliarVarias([i]); }
+async function rechazar(i)  { await rechazarVarias([i]); }
+async function conciliarSel() { await conciliarVarias(seleccionadas()); }
+async function rechazarSel()  { await rechazarVarias(seleccionadas()); }
+
+async function conciliarVarias(idxs) {
+  if (!idxs.length) return;
+  const matches = idxs.map(i => ({
+    fila_banco: SUG[i].fila_banco, fecha: SUG[i].fecha,
+    nro: SUG[i].nro, prov: SUG[i].prov, filas_fact: SUG[i].filas_fact,
+  }));
+  try {
+    const r = await fetch('/api/conciliacion/aplicar', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({matches}),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'error');
+    aviso(`${d.links || matches.length} conciliada(s).` +
+          (d.fechas ? ` ${d.fechas} fecha(s) de pago completada(s).` : ''), 'ok');
+    quitar(idxs);
+  } catch (e) {
+    aviso('No pude conciliar: ' + e.message, 'err');
+  }
+}
+
+async function rechazarVarias(idxs) {
+  if (!idxs.length) return;
+  const pares = idxs.map(i => ({
+    fila_banco: SUG[i].fila_banco, fecha_mov: SUG[i].fecha, desc_mov: SUG[i].desc,
+    monto_mov: SUG[i].monto, nro: SUG[i].nro, prov: SUG[i].prov,
+    total: SUG[i].total, criterio: SUG[i].criterio,
+  }));
+  try {
+    const r = await fetch('/api/conciliacion/rechazar', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({pares}),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'error');
+    aviso(`${d.rechazados} descartada(s). No se volverán a proponer.`, 'ok');
+    quitar(idxs);
+    cargarRechazos();
+  } catch (e) {
+    aviso('No pude registrar el rechazo: ' + e.message, 'err');
+  }
+}
+
+async function cargarRechazos() {
+  try {
+    const r = await fetch('/api/conciliacion/rechazos');
+    const d = await r.json();
+    const lista = d.rechazos || [];
+    document.getElementById('boxRech').style.display = lista.length ? '' : 'none';
+    document.getElementById('nRech').textContent = lista.length;
+    document.getElementById('tRech').innerHTML = lista.map(x => `
+      <tr>
+        <td>${esc(x.fecha_mov || '')}</td>
+        <td>${esc((x.desc_mov || '').slice(0, 46))}</td>
+        <td style="text-align:right">${fmt(x.monto_mov)}</td>
+        <td>${esc(x.prov || '')} · N° ${esc(x.nro || '')}</td>
+        <td><button class="btn sec" onclick="deshacer(${x.id})">Reactivar</button></td>
+      </tr>`).join('');
+  } catch (e) { /* el panel es accesorio: si falla, no molesta */ }
+}
+
+async function deshacer(id) {
+  try {
+    await fetch('/api/conciliacion/deshacer-rechazo', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({id}),
+    });
+    aviso('Sugerencia reactivada. Vuelve a buscar para verla.', 'ok');
+    cargarRechazos();
+  } catch (e) { aviso('No pude reactivarla: ' + e.message, 'err'); }
+}
+
+cargar();
+</script>
+</body>
+</html>

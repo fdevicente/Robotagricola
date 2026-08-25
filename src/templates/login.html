@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ingresar — Agrícola Santa Elisa</title>
+<style>
+body { font-family: -apple-system, "Segoe UI", Arial, sans-serif; margin: 0;
+       min-height: 100vh; display: flex; align-items: center; justify-content: center;
+       background: linear-gradient(135deg, #16a394 0%, #0f6f66 100%); }
+.box { background: #fff; border-radius: 12px; padding: 34px 32px; width: 380px;
+       max-width: 92vw; box-shadow: 0 14px 40px rgba(10,40,35,.28); }
+.logo { width: 54px; height: 54px; border-radius: 12px; background: #16a394; color: #fff;
+        display: flex; align-items: center; justify-content: center; font-weight: 700;
+        font-size: 19px; margin: 0 auto 14px; }
+h1 { font-size: 19px; text-align: center; margin: 0 0 4px; color: #22323c; }
+.sub { text-align: center; color: #8798a4; font-size: 13px; margin-bottom: 22px; }
+label { display: block; font-size: 13px; color: #5b6b77; margin-bottom: 4px; }
+input { width: 100%; padding: 11px 12px; border: 1px solid #d5dde3; border-radius: 6px;
+        font-size: 14px; margin-bottom: 14px; box-sizing: border-box; }
+input:focus { outline: none; border-color: #16a394; }
+button { width: 100%; padding: 12px; background: #16a394; color: #fff; border: none;
+         border-radius: 6px; font-size: 15px; font-weight: 600; cursor: pointer; }
+button:hover { background: #128577; }
+.err { background: #fdecea; color: #b3372a; border-radius: 6px; padding: 10px 12px;
+       font-size: 13px; margin-bottom: 15px; }
+.pie { text-align: center; color: #9aa7b1; font-size: 11px; margin-top: 18px; line-height: 1.5; }
+</style>
+</head>
+<body>
+  <form class="box" method="post" autocomplete="on">
+    <div class="logo">ASE</div>
+    <h1>Agrícola Santa Elisa</h1>
+    <div class="sub">Sistema de gestión</div>
+    {% if error %}<div class="err">{{ error }}</div>{% endif %}
+    <input type="hidden" name="next" value="{{ next or '' }}">
+    <label for="usuario">Usuario</label>
+    <input id="usuario" name="usuario" value="{{ usuario or '' }}" required autofocus
+           autocomplete="username">
+    <label for="password">Contraseña</label>
+    <input id="password" name="password" type="password" required
+           autocomplete="current-password">
+    <button type="submit">Ingresar</button>
+    <div class="pie">Acceso restringido. Los accesos quedan registrados.<br>
+      Datos personales tratados conforme a la normativa vigente.</div>
+  </form>
+</body>
+</html>

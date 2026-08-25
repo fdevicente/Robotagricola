@@ -1,0 +1,19 @@
+Total REVISAR: 0
+
+Distribution by Provider:
+
+=== Sample Categorization by Provider ===
+La llamada fue rechazada por el destinatario. (Excepci¢n de HRESULT: 0x80010001 (RPC_E_CALL_REJECTED))
+En C:\Users\Windows\Desktop\Workflow\Agricola Santa Elisa\Robot\categorize_revisar.ps1: 73 Car cter: 1
++ $wb.Close($false)
++ ~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], COMException
+    + FullyQualifiedErrorId : System.Runtime.InteropServices.COMException
+ 
+Excepci¢n al llamar a "Quit" con los argumentos "0": "Excepci¢n de HRESULT: 0x800AC472"
+En C:\Users\Windows\Desktop\Workflow\Agricola Santa Elisa\Robot\categorize_revisar.ps1: 74 Car cter: 1
++ $xl.Quit()
++ ~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [], MethodInvocationException
+    + FullyQualifiedErrorId : COMException
+ 

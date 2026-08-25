@@ -28,6 +28,13 @@ BANCO_CLAVE       = get_secret("BANCO_CLAVE")
 # Chat ID para notificaciones automáticas (se obtiene con /start y se guarda)
 TELEGRAM_CHAT_ID  = os.getenv("TELEGRAM_CHAT_ID", "")
 
+# Usuarios en MODO CAPATAZ (auto-registro sin confirmar):
+#  - su texto libre se guarda como bitácora automáticamente (sin /bitacora ni botón)
+#  - sus facturas se guardan directo (sin preview/confirmación) -> la cola nunca se atora
+# Default: Juan Parada (chat 8840816610). Editable por env AUTO_SAVE_USERS="id1,id2".
+_auto_env = os.getenv("AUTO_SAVE_USERS", "8840816610")
+AUTO_SAVE_USERS = {int(x) for x in _auto_env.replace(";", ",").split(",") if x.strip().isdigit()}
+
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 os.makedirs(BOLETAS_DIR, exist_ok=True)
 
@@ -55,5 +62,5 @@ CASH_FLOW_CONFIG = {
     'fecha_limite_cerezas': '12-15',
     'fecha_limite_nueces': '05-30',
     'dias_sin_guia_cierre': 7,
-    'usd_clp_estimado': 1000,
+    'usd_clp_estimado': 910,   # 2026-08-17: promedio de conversiones reales (908,10 y 932,00). Antes 1.000, que sobrevaloraba la caja USD.
 }

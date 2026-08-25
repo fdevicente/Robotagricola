@@ -15,4 +15,6 @@ def test_cash_flow_config_defaults():
     assert CASH_FLOW_CONFIG['fecha_limite_cerezas'] == '12-15'
     assert CASH_FLOW_CONFIG['fecha_limite_nueces'] == '05-30'
     assert CASH_FLOW_CONFIG['dias_sin_guia_cierre'] == 7
-    assert CASH_FLOW_CONFIG['usd_clp_estimado'] == 1000
+    # 2026-08-17: 1.000 -> 910. Promedio de las dos unicas conversiones reales
+    # del banco: 908,10 (16-mar-2026) y 932,00 (26-mar-2026).
+    assert CASH_FLOW_CONFIG['usd_clp_estimado'] == 910

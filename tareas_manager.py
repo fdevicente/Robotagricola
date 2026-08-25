@@ -7,6 +7,7 @@ from datetime import date, datetime
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from config import EXCEL_PATH
+from excel_manager import _save_wb  # guardado con reintentos si Excel está abierto
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ def crear_hojas_tareas():
     wb = _open_wb()
     _ensure_tareas(wb)
     _ensure_bitacora(wb)
-    wb.save(EXCEL_PATH)
+    _save_wb(wb)
 
 
 def _next_task_id(ws):
@@ -80,7 +81,7 @@ def crear_tarea(descripcion: str, prioridad: str = "Media",
         task_id, hoy, descripcion, prioridad,
         "Pendiente", responsable, fecha_limite or "", "", ""
     ])
-    wb.save(EXCEL_PATH)
+    _save_wb(wb)
     logger.info(f"Tarea #{task_id} creada: {descripcion}")
     return {"id": task_id, "descripcion": descripcion, "prioridad": prioridad,
             "estado": "Pendiente", "responsable": responsable, "fecha_limite": fecha_limite}
@@ -131,7 +132,7 @@ def actualizar_tarea(task_id: int, estado: str = None, observaciones: str = None
                 ws.cell(row=row_idx, column=9).value = (
                     f"{prev}\n{date.today().strftime('%d/%m')}: {observaciones}" if prev
                     else f"{date.today().strftime('%d/%m')}: {observaciones}")
-            wb.save(EXCEL_PATH)
+            _save_wb(wb)
             logger.info(f"Tarea #{task_id} actualizada: estado={estado}")
             return True
     wb.close()
@@ -149,7 +150,7 @@ def registrar_bitacora(registro: str, categoria: str = "General") -> bool:
         registro,
         categoria,
     ])
-    wb.save(EXCEL_PATH)
+    _save_wb(wb)
     logger.info(f"Bitácora: {registro[:50]}")
     return True
 

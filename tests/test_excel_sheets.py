@@ -3,6 +3,7 @@ import os, shutil, pytest
 from openpyxl import load_workbook
 from excel_manager import ensure_cash_flow_sheets, COSECHAS_SHEET, GUIAS_SHEET
 from excel_manager import FLUJO_CAJA_SHEET, AJUSTES_SHEET, CONFIG_SHEET, HECTAREAS_SHEET
+from config import CASH_FLOW_CONFIG
 
 
 @pytest.fixture
@@ -40,15 +41,27 @@ def test_config_has_defaults(test_excel):
     ws = wb[CONFIG_SHEET]
     params = {ws.cell(r, 1).value: ws.cell(r, 2).value for r in range(2, ws.max_row + 1)}
     assert params['saldo_minimo_pct'] == 0.10
-    assert params['usd_clp_estimado'] == 1000
+    # se compara contra la config, no contra un literal: asi no queda obsoleto
+    # cada vez que el dueno ajusta el tipo de cambio
+    assert params['usd_clp_estimado'] == CASH_FLOW_CONFIG['usd_clp_estimado']
     wb.close()
 
 
 def test_hectareas_has_data(test_excel):
+    """Hay una fila por año con superficie numérica en los 3 cultivos.
+
+    No se fijan valores: las hectáreas cambian con el replante.
+    """
     ensure_cash_flow_sheets(test_excel)
     wb = load_workbook(test_excel, read_only=True)
     ws = wb[HECTAREAS_SHEET]
-    assert ws.cell(2, 1).value == 2024
-    assert ws.cell(2, 2).value == 65  # nogales 2024
-    assert ws.cell(4, 4).value == 26.5  # avellanos 2026
+    filas = [r for r in ws.iter_rows(min_row=2, max_col=4, values_only=True) if r[0]]
     wb.close()
+
+    assert len(filas) >= 3, "faltan años en la hoja Hectareas"
+    anios = [f[0] for f in filas]
+    assert anios == sorted(anios), "los años no están en orden"
+    for anio, nog, cer, ave in filas:
+        assert isinstance(anio, int)
+        for sup in (nog, cer, ave):
+            assert isinstance(sup, (int, float)) and sup >= 0

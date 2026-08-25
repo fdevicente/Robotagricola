@@ -32,9 +32,12 @@ def format_proyeccion(cf: dict) -> str:
 
 async def cmd_proyeccion(update, context):
     """`/proyeccion [meses]` (default 6)."""
+    from modules.cuentas import caja_total
+
     args = context.args or []
     n_meses = int(args[0]) if args and args[0].isdigit() else 6
-    saldo_actual = 130_600_000
+    caja = caja_total()                 # cuenta corriente + cuenta dólar
+    saldo_actual = caja["total"]
 
     from datetime import date
     today = date.today()
@@ -48,7 +51,8 @@ async def cmd_proyeccion(update, context):
 
     cf = get_cash_flow(start=(sy, sm), end=(ey, em),
                        saldo_inicial=saldo_actual)
-    text = format_proyeccion(cf)
+    from modules.cuentas import formato as _fmt_caja
+    text = _fmt_caja(caja) + "\n\n" + format_proyeccion(cf)
     await update.message.reply_text(text, parse_mode="Markdown")
 
 

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Vacaciones Pendientes — Agrícola Santa Elisa</title>
+<style>
+body { font-family: -apple-system, Arial, sans-serif; margin: 0; background: #f5f5f5; color: #2c3e50; }
+.header { background: #2c3e50; color: white; padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; }
+.header h1 { margin: 0; font-size: 20px; }
+.header a { color: #95d5d3; margin-left: 16px; text-decoration: none; font-size: 13px; }
+.container { padding: 20px; max-width: 1500px; margin: 0 auto; }
+.summary { background: white; padding: 14px 20px; margin-bottom: 16px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); display: flex; gap: 30px; }
+.summary-item { display: flex; flex-direction: column; }
+.summary-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+.summary-value { font-size: 22px; font-weight: 700; margin-top: 4px; color: #2c3e50; }
+.card { background: white; padding: 18px 22px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: 10px 12px; background: #f8f9fa; color: #555; font-weight: 600; font-size: 11px; text-transform: uppercase; border-bottom: 2px solid #e0e0e0; }
+td { padding: 10px 12px; border-bottom: 1px solid #eee; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+tr:hover td { background: #fafbfc; }
+.pendiente { font-weight: 700; font-size: 15px; }
+.warning { color: #c0392b; }
+.ok { color: #27ae60; }
+.note { font-size: 11px; color: #aaa; font-style: italic; }
+.muted { color: #aaa; }
+.legal-info { background: #fff3cd; padding: 10px 14px; border-radius: 6px; font-size: 12px; color: #856404; margin-top: 14px; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>👷 Vacaciones Pendientes</h1>
+  <div>
+    <a href="/general">← Dashboard General</a>
+    <a href="/temporadas">Por Temporada</a>
+    <a href="/cash-flow">Cash Flow</a>
+    <span id="hoy" style="color:#95a5a6; margin-left:12px"></span>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="summary" id="summary"></div>
+
+  <div class="card">
+    <h2 style="margin: 0 0 16px 0; font-size: 14px; color: #555; text-transform: uppercase; letter-spacing: 0.5px;">Personal Fijo</h2>
+    <table id="tabla">
+      <thead>
+        <tr>
+          <th>Trabajador</th>
+          <th>RUT</th>
+          <th>Contrato</th>
+          <th class="num">Años</th>
+          <th class="num">Saldo base</th>
+          <th>Fecha saldo</th>
+          <th class="num">Meses ↑</th>
+          <th class="num">Días acumulados</th>
+          <th class="num">Días tomados</th>
+          <th class="num">PENDIENTE</th>
+          <th>Notas</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <div class="legal-info">
+      💡 <strong>Cálculo:</strong> Saldo base + (Meses desde fecha saldo × 1.25 días/mes) − Días tomados registrados.
+      Según ley chilena: 15 días hábiles por año trabajado (1.25 días/mes).
+    </div>
+  </div>
+
+</div>
+
+<script>
+document.getElementById('hoy').textContent = new Date().toLocaleDateString('es-CL', {year:'numeric', month:'long', day:'numeric'});
+
+async function load() {
+  const r = await fetch('/api/vacaciones');
+  const data = await r.json();
+
+  // Summary
+  const totalPendiente = data.reduce((s, p) => s + p.total_pendiente, 0);
+  const cntCriticos = data.filter(p => p.total_pendiente > 40).length;
+  document.getElementById('summary').innerHTML = `
+    <div class="summary-item">
+      <div class="summary-label">Personal</div>
+      <div class="summary-value">${data.length}</div>
+    </div>
+    <div class="summary-item">
+      <div class="summary-label">Días Pendientes Totales</div>
+      <div class="summary-value warning">${totalPendiente.toFixed(0)}</div>
+    </div>
+    <div class="summary-item">
+      <div class="summary-label">Con >40 días acumulados</div>
+      <div class="summary-value ${cntCriticos > 0 ? 'warning' : 'ok'}">${cntCriticos}</div>
+    </div>
+  `;
+
+  // Tabla
+  let html = '';
+  for (const p of data) {
+    const pendCls = p.total_pendiente > 40 ? 'warning' : (p.total_pendiente > 20 ? '' : 'ok');
+    html += `<tr>
+      <td><strong>${p.nombre}</strong></td>
+      <td><span class="muted">${p.rut}</span></td>
+      <td>${p.fecha_contrato}</td>
+      <td class="num">${p.anos_trabajados}</td>
+      <td class="num">${p.saldo_base}</td>
+      <td>${p.fecha_saldo}</td>
+      <td class="num">${p.meses_acumulados}</td>
+      <td class="num">${p.dias_acumulados}</td>
+      <td class="num">${p.dias_tomadas || '-'}</td>
+      <td class="num pendiente ${pendCls}">${p.total_pendiente}</td>
+      <td><span class="note">${p.notas}</span></td>
+    </tr>`;
+  }
+  document.querySelector('#tabla tbody').innerHTML = html;
+}
+
+load();
+</script>
+</body>
+</html>

@@ -11,7 +11,7 @@ from config import EXCEL_PATH
 from excel_manager import (
     SHEET_NAME, CUENTA_BANCO_SHEET,
     COSECHAS_SHEET, HECTAREAS_SHEET, AJUSTES_SHEET, FLUJO_CAJA_SHEET,
-    CATEGORIAS, CULTIVOS,
+    CATEGORIAS, CULTIVOS, IVA_RATE,
 )
 
 
@@ -30,33 +30,94 @@ def _to_year_month(v) -> tuple[int, int] | None:
     return None
 
 
+EXCLUIR_CATS_EGRESO = {
+    "TRANSFERENCIA INTERNA", "PRE-2021 HISTORICO", "REVISAR",
+    "INGRESO VENTAS", "INGRESO OPERACIONAL", "INGRESO FINANCIERO",
+    "INGRESO NOGALES", "INGRESO CEREZOS", "INGRESO AVELLANOS", "INGRESO GENERAL",
+    "CAMBIO DIVISA",                    # neutro contablemente
+    "PRESTAMOS A OTRAS SOCIEDADES",     # no operacional
+    "REINTEGROS Y DEVOLUCIONES",        # ajustes contables
+    "BONO VENTA NUECES",                 # se calcula como 8% de ventas, via ajuste manual
+}
+
+
+# Categorías que provienen SOLO del banco (no tienen factura asociada):
+# sueldos, impuestos, comisiones bancarias, TAG, S-Invest, etc.
+CATS_SOLO_BANCO = {
+    "MANO DE OBRA PLANTA",         # remuneraciones mensuales
+    "MANO DE OBRA TEMPORAL",        # BH jornaleros (Alpabesa también)
+    "SERVICIOS PROFESIONALES",      # BH Francisco Donoso + Capital Office
+    "IMPUESTOS",                    # F29 mensual + contribuciones
+    "GASTOS BANCARIOS",             # comisiones, intereses
+    "GASTOS VEHICULOS",             # TAG, permiso circulación, SOAP
+    "LEASING",                      # cuotas
+    "COSTO ENERGETICO",             # S-Invest paneles solares
+    "ENERGIA",                      # CGE
+    "TRANSFERENCIA INTERNA",
+    "PRESTAMOS A OTRAS SOCIEDADES",
+    "CAMBIO DIVISA",
+    "REINTEGROS Y DEVOLUCIONES",
+    "BONO VENTA NUECES",
+}
+
+
 def load_historical_egresos(excel_path: str | None = None,
                               year: int | None = None) -> dict:
-    """Agrupa Facturas por (year, month, categoria, cultivo) -> total.
+    """Agrupa egresos por (year, month, categoria, cultivo) -> total.
 
-    Salta filas sin Categoria o con Categoria=REVISAR.
+    Estrategia para EVITAR doble conteo:
+    - Para categorías típicamente de Facturas (insumos, fertilizantes, etc.):
+      usar SOLO la hoja Facturas (con o sin fecha_pago).
+    - Para categorías típicamente del banco (sueldos, impuestos, TAG, etc.):
+      usar SOLO la hoja Cuenta Banco.
     """
     excel_path = excel_path or EXCEL_PATH
     wb = load_workbook(excel_path, read_only=True, data_only=True)
-    ws = wb[SHEET_NAME]
     agg: dict = defaultdict(float)
-    for row in ws.iter_rows(min_row=2, max_col=18, values_only=True):
+
+    # FACTURAS: usar fecha de pago si existe, sino fecha emisión
+    ws = wb[SHEET_NAME]
+    for row in ws.iter_rows(min_row=2, max_col=20, values_only=True):
         proveedor = row[3]
-        if not proveedor:
-            continue
+        if not proveedor: continue
         categoria = row[16]
-        if not categoria or categoria == "REVISAR":
-            continue
+        if not categoria: continue
+        cat_up = str(categoria).strip().upper()
+        if cat_up in EXCLUIR_CATS_EGRESO: continue
+        if cat_up in CATS_SOLO_BANCO: continue  # estas se cuentan solo del banco
+        # Saltar NN
+        cat_por = str(row[19] or "") if len(row) > 19 else ""
+        if "NN-no-pagar" in cat_por: continue
         cultivo = row[17] or "GENERAL"
         total = row[14]
-        if not total:
-            continue
-        ym = _to_year_month(row[0])
-        if not ym:
-            continue
-        if year is not None and ym[0] != year:
-            continue
-        agg[(ym[0], ym[1], categoria, cultivo)] += float(total)
+        if not total: continue
+        fecha_uso = row[2] if row[2] else row[0]
+        ym = _to_year_month(fecha_uso)
+        if not ym: continue
+        if year is not None and ym[0] != year: continue
+        agg[(ym[0], ym[1], cat_up, cultivo)] += float(total)
+
+    # BANCO: solo cargos en CATS_SOLO_BANCO
+    if CUENTA_BANCO_SHEET in wb.sheetnames:
+        ws_b = wb[CUENTA_BANCO_SHEET]
+        for row in ws_b.iter_rows(min_row=2, max_col=9, values_only=True):
+            if not row[0]: continue
+            try:
+                cargo = float(row[3] or 0)
+            except (TypeError, ValueError):
+                continue
+            if cargo <= 0: continue
+            categoria = row[7]
+            if not categoria: continue
+            cat_up = str(categoria).strip().upper()
+            if cat_up in EXCLUIR_CATS_EGRESO: continue
+            if cat_up not in CATS_SOLO_BANCO: continue  # estas se cuentan de facturas
+            ym = _to_year_month(row[0])
+            if not ym: continue
+            if year is not None and ym[0] != year: continue
+            cultivo = "GENERAL"
+            agg[(ym[0], ym[1], cat_up, cultivo)] += cargo
+
     wb.close()
     return dict(agg)
 
@@ -124,7 +185,14 @@ def load_ajustes_manuales(excel_path: str | None = None) -> list:
 
 
 def load_expected_ingresos(excel_path: str | None = None) -> list:
-    """Lee Cosechas, devuelve ingresos proyectados convertidos a CLP."""
+    """Lee Cosechas, devuelve ingresos proyectados convertidos a CLP.
+
+    La columna 17 "Aplica IVA" (SI/NO) solo pesa en las filas `esperado`: si el
+    comprador paga en pesos agrega 19% encima del neto, y esa plata SÍ entra a la
+    caja. Valbifrut lo hace (mayo-2026: neto $223.596.523 + IVA $42.483.234);
+    Pacific paga en USD por COMEX y no lo agrega. Las filas `recibido` no se tocan
+    porque ya guardan el efectivo real, IVA incluido.
+    """
     from config import CASH_FLOW_CONFIG
     usd_clp = CASH_FLOW_CONFIG.get("usd_clp_estimado", 1000)
 
@@ -132,10 +200,11 @@ def load_expected_ingresos(excel_path: str | None = None) -> list:
     wb = load_workbook(excel_path, read_only=True, data_only=True)
     ws = wb[COSECHAS_SHEET]
     ingresos = []
-    for row in ws.iter_rows(min_row=2, max_col=16, values_only=True):
+    for row in ws.iter_rows(min_row=2, max_col=17, values_only=True):
         if not row[0]:
             continue
         estado = row[11]
+        aplica_iva = str(row[16] or "").strip().upper() in ("SI", "SÍ", "S", "TRUE", "1")
         if estado == "recibido":
             monto_real = row[13]
             fecha = row[12]
@@ -157,6 +226,8 @@ def load_expected_ingresos(excel_path: str | None = None) -> list:
             if m_val <= 0:
                 continue
             monto_clp = m_val * usd_clp
+            if aplica_iva:
+                monto_clp *= 1 + IVA_RATE
             ym = _to_year_month(row[8])
         if not ym:
             continue
@@ -166,6 +237,7 @@ def load_expected_ingresos(excel_path: str | None = None) -> list:
             "exportadora": row[3] or "",
             "tipo_cuota": row[10] or "",
             "estado": estado or "esperado",
+            "aplica_iva": aplica_iva,
             "monto_clp": float(monto_clp),
         })
     wb.close()
@@ -191,14 +263,33 @@ def compute_factor_hc(hc: dict, cultivo: str, base_year: int, target_year: int) 
     return target / base
 
 
+EXCLUIR_PROYECCION = {
+    "MANTENIMIENTO HELICOPTERO",   # operación descontinuada
+}
+# Categorías excluidas del histórico (no replicar del año pasado), pero ajustes
+# manuales sí se aplican.
+EXCLUIR_HISTORICO_SOLO = {
+    "LEASING",                      # ya pagado en dic-2025
+    "COSTO ENERGETICO",             # ajuste manual mensual según clima
+    "GASTOS VEHICULOS",             # ajuste manual a valor fijo
+    "MANO DE OBRA TEMPORAL",        # ajuste manual: $25M nueces + $4M cerezas
+    "MATERIALES",                   # ajuste manual: $4M/año
+    "MANO DE OBRA PLANTA",          # ajuste manual: líquidos + Previred + aguinaldos
+}
+
+
 def compute_egresos_proyectados(historicos: dict, ajustes: list,
                                   hc: dict, base_year: int,
                                   target_year: int) -> dict:
-    """Proyecta egresos del target_year escalando base_year + sumando ajustes."""
+    """Proyecta egresos del target_year escalando base_year + sumando ajustes.
+    Excluye categorías en EXCLUIR_PROYECCION (operaciones descontinuadas)."""
     proj: dict = defaultdict(float)
 
     for (y, m, cat, cul), monto in historicos.items():
         if y != base_year:
+            continue
+        cu = (cat or "").upper()
+        if cu in EXCLUIR_PROYECCION or cu in EXCLUIR_HISTORICO_SOLO:
             continue
         factor = compute_factor_hc(hc, cul, base_year, target_year)
         proj[(target_year, m, cat, cul)] += monto * factor
@@ -207,6 +298,9 @@ def compute_egresos_proyectados(historicos: dict, ajustes: list,
         ym = a["mes_proyectado"]
         if ym[0] != target_year:
             continue
+        if (a["categoria"] or "").upper() in EXCLUIR_PROYECCION:
+            continue
+        # Ajustes para cats EXCLUIR_HISTORICO_SOLO sí se aplican
         key = (target_year, ym[1], a["categoria"], a["cultivo"])
         proj[key] += a["monto"]
 

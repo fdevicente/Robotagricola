@@ -1,0 +1,770 @@
+[
+  {
+    "fila": 1250,
+    "fecha": 46099,
+    "proveedor": "IMPORTADORA SANTA TERESITA TRADER LIMITADA",
+    "nro": 2746,
+    "detalle": "Maxisacos - sacos grandes",
+    "total": 5206250
+  },
+  {
+    "fila": 595,
+    "fecha": 45791,
+    "proveedor": "ARRAYAN-AEROMAR S.A",
+    "nro": 2163,
+    "detalle": "Inspecciones efectuadas a aeronave CC-AKC",
+    "total": 4165000
+  },
+  {
+    "fila": 535,
+    "fecha": 45761,
+    "proveedor": "Pacifor",
+    "nro": 7535,
+    "detalle": "Pallets 1.00 x 1.200 secos con tratamiento NIMF N°15",
+    "total": 3891300
+  },
+  {
+    "fila": 518,
+    "fecha": 45747,
+    "proveedor": "CONFECCION DE MAXISACOS CARMEN GLORIA MANRIQUEZ CABRERA E.I.R.L.",
+    "nro": 2061,
+    "detalle": "Maxisaco 90x90x200cm con faldon de descarga - saco big bag agricola",
+    "total": 3512880
+  },
+  {
+    "fila": 520,
+    "fecha": 45747,
+    "proveedor": "CONFECCIONES CARMEN",
+    "nro": 2061,
+    "detalle": "360 Maxisacos",
+    "total": 3512880
+  },
+  {
+    "fila": 669,
+    "fecha": 45861,
+    "proveedor": "AGROAVELLANO SPA",
+    "nro": 1034,
+    "detalle": "Traslado de equipo - servicio transporte",
+    "total": 2450000
+  },
+  {
+    "fila": 1262,
+    "fecha": 46107,
+    "proveedor": "MASSINISA SPA",
+    "nro": 7,
+    "detalle": "Confección de cercos con polines",
+    "total": 2023000
+  },
+  {
+    "fila": 1249,
+    "fecha": 46099,
+    "proveedor": "CONRADO ANTONIO RIQUELME VASQUEZ",
+    "nro": 170,
+    "detalle": "Maicillo - material árido",
+    "total": 1285200
+  },
+  {
+    "fila": 47,
+    "fecha": 45031,
+    "proveedor": "GMT",
+    "nro": 619159,
+    "detalle": "REFLEXOL",
+    "total": 1218347.7635
+  },
+  {
+    "fila": 586,
+    "fecha": 45785,
+    "proveedor": "Pacifor",
+    "nro": 7586,
+    "detalle": "PALLETS 1.00 X 1.200",
+    "total": 1130500
+  },
+  {
+    "fila": 348,
+    "fecha": 45565,
+    "proveedor": "Francisco Pardo",
+    "nro": 13194,
+    "detalle": "FLETE NUECES",
+    "total": 1106562
+  },
+  {
+    "fila": 565,
+    "fecha": 45779,
+    "proveedor": "KITCHEN CENTER SPA",
+    "nro": 11332629,
+    "detalle": "Parrilla FDV Deluxe 5Q GLP 3.0",
+    "total": 1019980
+  },
+  {
+    "fila": 41,
+    "fecha": 45016,
+    "proveedor": "CONFECCIONES CARMEN",
+    "nro": 342,
+    "detalle": "MAXISACOS",
+    "total": 1011500
+  },
+  {
+    "fila": 1078,
+    "fecha": 45993,
+    "proveedor": "CHRISTIAN FRANCISCO RODRIGUEZ TORRES",
+    "nro": 119,
+    "detalle": "PINTURAS DECORATIVAS",
+    "total": 964913
+  },
+  {
+    "fila": 282,
+    "fecha": 45399,
+    "proveedor": "CONFECCIONES CARMEN",
+    "nro": 1035,
+    "detalle": "MAXISACOS",
+    "total": 867510
+  },
+  {
+    "fila": 526,
+    "fecha": 45756,
+    "proveedor": "Marsella SPA",
+    "nro": 289436,
+    "detalle": "Soplador a combustion 65.6cc 570BTS - herramienta Husqvarna",
+    "total": 808709
+  },
+  {
+    "fila": 458,
+    "fecha": 45671,
+    "proveedor": "Astara Retail Chile SpA",
+    "nro": 1023143,
+    "detalle": "Musso Grand Limited 2.2TD 6AT 4WD - vehículo SsangYong, patente TBPY45",
+    "total": 695922
+  },
+  {
+    "fila": 111,
+    "fecha": 45149,
+    "proveedor": "INTRALOG CHILE SPA",
+    "nro": 104,
+    "detalle": "NUECES ESPAÑA",
+    "total": 690200
+  },
+  {
+    "fila": 246,
+    "fecha": 45316,
+    "proveedor": "SODIMAC",
+    "nro": 130492563,
+    "detalle": "Implementos para soldar y amarra cable",
+    "total": 554242.25
+  },
+  {
+    "fila": 811,
+    "fecha": 45939,
+    "proveedor": "CHRISTIAN FRANCISCO RODRIGUEZ TORRES",
+    "nro": 116,
+    "detalle": "Pinturas decorativas",
+    "total": 385987
+  },
+  {
+    "fila": 35,
+    "fecha": 45002,
+    "proveedor": "COPEVAL",
+    "nro": 5196468,
+    "detalle": "CINTA PLANA",
+    "total": 383310.6263
+  },
+  {
+    "fila": 801,
+    "fecha": 46048,
+    "proveedor": "IMPORTADORA PCPLAY CHILE SPA",
+    "nro": 67706,
+    "detalle": "Switch Dahua POE 4 puertos 36W - switch de red",
+    "total": 352500
+  },
+  {
+    "fila": 802,
+    "fecha": 46048,
+    "proveedor": "IMPORTADORA PCPLAY CHILE SPA",
+    "nro": 67706,
+    "detalle": "Cámara Dahua Bullet IP 4MP 2.8mm con micrófono - cámara de seguridad",
+    "total": 352500
+  },
+  {
+    "fila": 757,
+    "fecha": 45925,
+    "proveedor": "NASJAC SPA",
+    "nro": 2340,
+    "detalle": "Punto de acceso inalámbrico Tplink EAP650-Outdoor Wifi 6",
+    "total": 343970
+  },
+  {
+    "fila": 758,
+    "fecha": 45925,
+    "proveedor": "NASJAC SPA",
+    "nro": 2340,
+    "detalle": "Despacho",
+    "total": 343970
+  },
+  {
+    "fila": 764,
+    "fecha": 45927,
+    "proveedor": "FJTECH SPA",
+    "nro": 68,
+    "detalle": "EAP615-WALL WiFi 6 AX1900",
+    "total": 330501
+  },
+  {
+    "fila": 28,
+    "fecha": 44993,
+    "proveedor": "COPEVAL",
+    "nro": 5196090,
+    "detalle": "CINTA PLANA",
+    "total": 324553.23628
+  },
+  {
+    "fila": 363,
+    "fecha": 45586,
+    "proveedor": "INSUMOS ALBORNOZ LMTD",
+    "nro": 234,
+    "detalle": "TETRAPACK",
+    "total": 304045
+  },
+  {
+    "fila": 409,
+    "fecha": 45630,
+    "proveedor": "Copeval",
+    "nro": 379644,
+    "detalle": "NC F5879448",
+    "total": 302382.808
+  },
+  {
+    "fila": 110,
+    "fecha": 45149,
+    "proveedor": "INTRALOG CHILE SPA",
+    "nro": 105,
+    "detalle": "NUECES ESPAÑA FLETE",
+    "total": 287393.33
+  },
+  {
+    "fila": 559,
+    "fecha": 45777,
+    "proveedor": "Servicios Ambientales René Alejandro Bravo Novoa E.I.R.L.",
+    "nro": 19990,
+    "detalle": "Traslado baños químicos",
+    "total": 261800
+  },
+  {
+    "fila": 321,
+    "fecha": 45505,
+    "proveedor": "El Manzano Sociedad Anonima",
+    "nro": 256,
+    "detalle": "Fardos caballos",
+    "total": 249900
+  },
+  {
+    "fila": 752,
+    "fecha": 45923,
+    "proveedor": "INGENIERIA E INFORMATICA ASOCIADA LIMITADA",
+    "nro": 468703,
+    "detalle": "TP-LINK BRIDGE WI-FI OMADA DE EXTERIOR",
+    "total": 217979
+  },
+  {
+    "fila": 1241,
+    "fecha": 46125,
+    "proveedor": "INGENIERIA E INFORMATICA ASOCIADA LIMITADA",
+    "nro": 504531,
+    "detalle": "UPS APC Easy BVG1200I-MSX, 1200VA 650W Interactiva con Regulación de Voltaje",
+    "total": 195979
+  },
+  {
+    "fila": 1242,
+    "fecha": 46125,
+    "proveedor": "INGENIERIA E INFORMATICA ASOCIADA LIMITADA",
+    "nro": 504531,
+    "detalle": "UPS APC Easy BVG de 1600VA (900W), 4 Tomas Universales, AVR",
+    "total": 195979
+  },
+  {
+    "fila": 511,
+    "fecha": 45736,
+    "proveedor": "JUAN RAMON GUERRA LEON",
+    "nro": 124,
+    "detalle": "Traslado de maquinaria",
+    "total": 182000
+  },
+  {
+    "fila": 75,
+    "fecha": 45071,
+    "proveedor": "DREAMTEC HOLDINGS",
+    "nro": 3624,
+    "detalle": "IMPRESORA CAMPO",
+    "total": 169990.31
+  },
+  {
+    "fila": 762,
+    "fecha": 45926,
+    "proveedor": "DACAM SPA",
+    "nro": 6369,
+    "detalle": "Camara Bullet IP Full Color 2MP - camara de seguridad",
+    "total": 163471
+  },
+  {
+    "fila": 763,
+    "fecha": 45926,
+    "proveedor": "DACAM SPA",
+    "nro": 6369,
+    "detalle": "Camara Bullet IP 6MP Smart Dual con microfono - camara de seguridad",
+    "total": 163471
+  },
+  {
+    "fila": 501,
+    "fecha": 45727,
+    "proveedor": "Baumart SpA",
+    "nro": 4201,
+    "detalle": "Set De Llave Impacto Inalambrica Brushless 850Nm 1/2 Yato",
+    "total": 150214
+  },
+  {
+    "fila": 1281,
+    "fecha": 46128,
+    "proveedor": "SERVICIO TECNICO E INFORMATICO TECNO G LIMITADA",
+    "nro": 2644,
+    "detalle": "Reparacion PC",
+    "total": 150000
+  },
+  {
+    "fila": 1336,
+    "fecha": 45953,
+    "proveedor": "DACAM",
+    "nro": 6638,
+    "detalle": "3 camaras bullet ip",
+    "total": 140970
+  },
+  {
+    "fila": 235,
+    "fecha": 45309,
+    "proveedor": "COPEVAL",
+    "nro": 5545107,
+    "detalle": "ALAMBRE",
+    "total": 130900
+  },
+  {
+    "fila": 1261,
+    "fecha": 46106,
+    "proveedor": "GERSON BENJAMIN SALGADO PARADA",
+    "nro": 278,
+    "detalle": "Regulacion embrague toma de fuerza Tractor John Deere",
+    "total": 130900
+  },
+  {
+    "fila": 701,
+    "fecha": 45874,
+    "proveedor": "JCA SUPPLIES LIMITADA",
+    "nro": 846,
+    "detalle": "Electrocerradura BR Etap",
+    "total": 123599
+  },
+  {
+    "fila": 1193,
+    "fecha": 46084,
+    "proveedor": "GLOBALTECNO GROUP SPA",
+    "nro": 790,
+    "detalle": "Fotocelula BFT Desme - sensor fotoeléctrico para portón automático",
+    "total": 113904
+  },
+  {
+    "fila": 124,
+    "fecha": 45169,
+    "proveedor": "Francisco Pardo",
+    "nro": 11255,
+    "detalle": "",
+    "total": 106392
+  },
+  {
+    "fila": 1312,
+    "fecha": 45442,
+    "proveedor": "SEGTV ELECTRONICA SPA",
+    "nro": 10675,
+    "detalle": "Modulo GSM TRU 5024",
+    "total": 99970
+  },
+  {
+    "fila": 1308,
+    "fecha": 45308,
+    "proveedor": "PEDRO LASTRA",
+    "nro": 46646,
+    "detalle": "Fierros mesa",
+    "total": 95950
+  },
+  {
+    "fila": 459,
+    "fecha": 45720,
+    "proveedor": "CASA MUSA ELECTRONICA S.A.",
+    "nro": 280125,
+    "detalle": "MODULO ENCHUFE 2P+T 10A 250V ANTRACITA",
+    "total": 91591
+  },
+  {
+    "fila": 460,
+    "fecha": 45720,
+    "proveedor": "CASA MUSA ELECTRONICA S.A.",
+    "nro": 280125,
+    "detalle": "SOPORTE 3 MODULOS PLACAS AIR",
+    "total": 91591
+  },
+  {
+    "fila": 488,
+    "fecha": 45720,
+    "proveedor": "CASA MUSA ELECTRONICA S.A.",
+    "nro": 280125,
+    "detalle": "PLACA 3 PUESTOS ANTRACITA AIR",
+    "total": 91591
+  },
+  {
+    "fila": 450,
+    "fecha": 45685,
+    "proveedor": "TECHNOLOGY & BITS SPA",
+    "nro": 12161,
+    "detalle": "EAP 225 Access Point Exterior - equipamiento de red",
+    "total": 81400
+  },
+  {
+    "fila": 527,
+    "fecha": 45756,
+    "proveedor": "TECHNOLOGY & BITS SPA",
+    "nro": 13563,
+    "detalle": "EAP225 EXTERIOR TPLINK - access point exterior",
+    "total": 78490
+  },
+  {
+    "fila": 760,
+    "fecha": 45926,
+    "proveedor": "TECHNOLOGY & BITS SPA",
+    "nro": 17286,
+    "detalle": "Switch POE TL SG 2210P 61 - equipo de red",
+    "total": 77647
+  },
+  {
+    "fila": 761,
+    "fecha": 45926,
+    "proveedor": "TECHNOLOGY & BITS SPA",
+    "nro": 17286,
+    "detalle": "Envio",
+    "total": 77647
+  },
+  {
+    "fila": 666,
+    "fecha": 45855,
+    "proveedor": "FELIPE RENCORET SOZA",
+    "nro": 71,
+    "detalle": "Mediacion extrajudicial exitosa DICOM - Operador Rojelio Leiva",
+    "total": 60000
+  },
+  {
+    "fila": 1324,
+    "fecha": 45855,
+    "proveedor": "FELIPE RENCORET",
+    "nro": "BH71",
+    "detalle": "Mediacion Aridos Rojelio, Dicom",
+    "total": 60000
+  },
+  {
+    "fila": 475,
+    "fecha": 45707,
+    "proveedor": "VIREC SPA",
+    "nro": 41597,
+    "detalle": "Camara IP Dahua 2MP Plastica IR30m 2.8mm - camara de seguridad",
+    "total": 45220
+  },
+  {
+    "fila": 620,
+    "fecha": 45806,
+    "proveedor": "PEDRO ALBERTO ROJO CHAMORRO",
+    "nro": 5739,
+    "detalle": "PALA DOBLE HOYERA - herramienta ferretería",
+    "total": 42000
+  },
+  {
+    "fila": 718,
+    "fecha": 45898,
+    "proveedor": "NETEXPERTOS LIMITADA",
+    "nro": 29059,
+    "detalle": "Bandeja Almaciguera germinador semillas MIB-KN100",
+    "total": 39980
+  },
+  {
+    "fila": 1055,
+    "fecha": 45985,
+    "proveedor": "EFRAIN ENRIQUE MORALES GARRIDO",
+    "nro": 74102,
+    "detalle": "CAMBIO PIOLA MOTOSIERRA - repuesto motosierra",
+    "total": 34381
+  },
+  {
+    "fila": 1057,
+    "fecha": 45985,
+    "proveedor": "EFRAIN ENRIQUE MORALES GARRIDO",
+    "nro": 74102,
+    "detalle": "TRINQUETE MS170 192 210 250 39 - repuesto motosierra",
+    "total": 34381
+  },
+  {
+    "fila": 753,
+    "fecha": 45923,
+    "proveedor": "ADRIAN BARRIOS E HIJO LIMITADA",
+    "nro": 93885,
+    "detalle": "TUERCA HEX 8.8 M10-1.5 - ferretería",
+    "total": 34301
+  },
+  {
+    "fila": 754,
+    "fecha": 45923,
+    "proveedor": "ADRIAN BARRIOS E HIJO LIMITADA",
+    "nro": 93885,
+    "detalle": "GOLILLA PLANA CTE. 3/8 ZN - ferretería",
+    "total": 34301
+  },
+  {
+    "fila": 755,
+    "fecha": 45923,
+    "proveedor": "ADRIAN BARRIOS E HIJO LIMITADA",
+    "nro": 93885,
+    "detalle": "GOLILLA PRESION 10MM ZN - ferretería",
+    "total": 34301
+  },
+  {
+    "fila": 756,
+    "fecha": 45923,
+    "proveedor": "ADRIAN BARRIOS E HIJO LIMITADA",
+    "nro": 93885,
+    "detalle": "PERNO HEX M10-1.5X60 ZN - ferretería",
+    "total": 34301
+  },
+  {
+    "fila": 1072,
+    "fecha": 45988,
+    "proveedor": "FACTORAURORANIA DUCTIL SPA",
+    "nro": 64386,
+    "detalle": "Suministro Santiago",
+    "total": 33900
+  },
+  {
+    "fila": 1210,
+    "fecha": 46101,
+    "proveedor": "CASA MUSA ELECTRONICA S.A.",
+    "nro": 281655,
+    "detalle": "Modulo conector RJ45 CAT 6E conexion Toolless antracita",
+    "total": 32641
+  },
+  {
+    "fila": 1211,
+    "fecha": 46101,
+    "proveedor": "CASA MUSA ELECTRONICA S.A.",
+    "nro": 281655,
+    "detalle": "Modulo enchufe 2P+T 10A 250V antracita",
+    "total": 32641
+  },
+  {
+    "fila": 1294,
+    "fecha": 44994,
+    "proveedor": "FIGUEROA AUDITORES RECTIFICATORIA F 29",
+    "nro": 28233,
+    "detalle": "F29 del mes de abril 2022 diferencia de impuesto Único de $28.233",
+    "total": 28233
+  },
+  {
+    "fila": 1276,
+    "fecha": 46120,
+    "proveedor": "IMPORTADORA PCPLAY CHILE SPA",
+    "nro": 71598,
+    "detalle": "Switch Dahua 5 puertos Cloud - switch de red PoE",
+    "total": 25501
+  },
+  {
+    "fila": 1179,
+    "fecha": 46048,
+    "proveedor": "RESORTES GOMEZ LIMITADA",
+    "nro": 120895,
+    "detalle": "Perno 16x120 HDI - ferretería",
+    "total": 23401
+  },
+  {
+    "fila": 1180,
+    "fecha": 46048,
+    "proveedor": "RESORTES GOMEZ LIMITADA",
+    "nro": 120895,
+    "detalle": "Tuerca 16-1.5 seg. nylon - ferretería",
+    "total": 23401
+  },
+  {
+    "fila": 1181,
+    "fecha": 46048,
+    "proveedor": "RESORTES GOMEZ LIMITADA",
+    "nro": 120895,
+    "detalle": "Golilla 5/8 plana corriente zincada - ferretería",
+    "total": 23401
+  },
+  {
+    "fila": 1174,
+    "fecha": 46044,
+    "proveedor": "RESORTES GOMEZ LIMITADA",
+    "nro": 120809,
+    "detalle": "Perno 16x1.20 HDI - ferretería/tornillería",
+    "total": 23001
+  },
+  {
+    "fila": 1175,
+    "fecha": 46044,
+    "proveedor": "RESORTES GOMEZ LIMITADA",
+    "nro": 120809,
+    "detalle": "Tuerca 16-1.5 500 Nylon - ferretería/tornillería",
+    "total": 23001
+  },
+  {
+    "fila": 1176,
+    "fecha": 46044,
+    "proveedor": "RESORTES GOMEZ LIMITADA",
+    "nro": 120809,
+    "detalle": "Golilla 6/8 plana corriente - ferretería/tornillería",
+    "total": 23001
+  },
+  {
+    "fila": 1061,
+    "fecha": 46029,
+    "proveedor": "RESORTES GOMEZ LIMITADA",
+    "nro": 120469,
+    "detalle": "Golilla 5/8 plana corriente",
+    "total": 21850
+  },
+  {
+    "fila": 1062,
+    "fecha": 46029,
+    "proveedor": "RESORTES GOMEZ LIMITADA",
+    "nro": 120469,
+    "detalle": "Perno 16x120 hex grado 8.8 p-1.5",
+    "total": 21850
+  },
+  {
+    "fila": 1063,
+    "fecha": 46029,
+    "proveedor": "RESORTES GOMEZ LIMITADA",
+    "nro": 120469,
+    "detalle": "Tuerca 16-1.5 seg nylon",
+    "total": 21850
+  },
+  {
+    "fila": 549,
+    "fecha": 45771,
+    "proveedor": "STUDIO GROUP SPA",
+    "nro": 212685,
+    "detalle": "Fuente de poder LED Studio 60W 12V IP20 Gris",
+    "total": 21800
+  },
+  {
+    "fila": 736,
+    "fecha": 45910,
+    "proveedor": "IMPORTADORA PLUSAGRO LIMITADA",
+    "nro": 1010,
+    "detalle": "Semillas Hortalizas y Aromáticas",
+    "total": 20900
+  },
+  {
+    "fila": 1199,
+    "fecha": 46064,
+    "proveedor": "FLORES MORALES JUAN MARCOS Y OTRO",
+    "nro": 12366,
+    "detalle": "Pernos y artículos de ferretería",
+    "total": 14900
+  },
+  {
+    "fila": 338,
+    "fecha": 45544,
+    "proveedor": "Bioquimica",
+    "nro": 29257,
+    "detalle": "ALCOHOL Y AGUA PURA",
+    "total": 9719.92
+  },
+  {
+    "fila": 696,
+    "fecha": 45870,
+    "proveedor": "CIMECH PRO SPA",
+    "nro": 13479,
+    "detalle": "Cortador de cable o cortafrío modelo 170",
+    "total": 8180
+  },
+  {
+    "fila": 697,
+    "fecha": 45870,
+    "proveedor": "CIMECH PRO SPA",
+    "nro": 13479,
+    "detalle": "ENVIO",
+    "total": 8180
+  },
+  {
+    "fila": 623,
+    "fecha": 45812,
+    "proveedor": "LUCIA OLIVIA GARCIA CASTRO",
+    "nro": 1034,
+    "detalle": "Rompe Nueces Abridor Pelador Cortador De Nuez Cocina 18.5cm",
+    "total": 7990
+  },
+  {
+    "fila": 624,
+    "fecha": 45812,
+    "proveedor": "LUCIA OLIVIA GARCIA CASTRO",
+    "nro": 1034,
+    "detalle": "Envios",
+    "total": 7990
+  },
+  {
+    "fila": 740,
+    "fecha": 46027,
+    "proveedor": "RESORTES GOMEZ LIMITADA",
+    "nro": 121179,
+    "detalle": "Cultivo de filetes de pepinos ingreso - resortes y accesorios",
+    "total": 5827
+  },
+  {
+    "fila": 531,
+    "fecha": 45758,
+    "proveedor": "PROVEEDORES INTEGRALES PRISA S.A.",
+    "nro": 14096601,
+    "detalle": "Palillo mondadiente display 100 unidades estilo",
+    "total": 5583
+  },
+  {
+    "fila": 1033,
+    "fecha": 45975,
+    "proveedor": "RESORTES GOMEZ LIMITADA",
+    "nro": 119247,
+    "detalle": "Perno 3/4 x 4 hex. G5 NC",
+    "total": 4706
+  },
+  {
+    "fila": 1034,
+    "fecha": 45975,
+    "proveedor": "RESORTES GOMEZ LIMITADA",
+    "nro": 119247,
+    "detalle": "Tuerca 3/4 hex. G5 HC seg.",
+    "total": 4706
+  },
+  {
+    "fila": 1035,
+    "fecha": 45975,
+    "proveedor": "RESORTES GOMEZ LIMITADA",
+    "nro": 119247,
+    "detalle": "Golilla 3/4 plana F436",
+    "total": 4706
+  },
+  {
+    "fila": 1177,
+    "fecha": 46076,
+    "proveedor": "ILOP S.A. - LÁPIZ LÓPEZ",
+    "nro": 2978906,
+    "detalle": "Archivador tradicional cuenta ancho burro",
+    "total": 3990
+  },
+  {
+    "fila": 273,
+    "fecha": 45364,
+    "proveedor": "Copeval",
+    "nro": 375509,
+    "detalle": "Nota debito",
+    "total": 1249.5
+  }
+]

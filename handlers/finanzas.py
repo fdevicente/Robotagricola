@@ -9,12 +9,13 @@ import asyncio
 import logging
 import os
 import sys
-from datetime import datetime
+from datetime import date, datetime
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from config import TELEGRAM_CHAT_ID
+from scotiabank_scraper import CaptchaRequerido
 from excel_manager import (
     buscar_factura, registrar_pago, registrar_deposito_caja,
     consultar_saldo_caja, reporte_diario, reporte_semanal, reporte_mensual,
@@ -92,6 +93,7 @@ async def cmd_dashboard(update, context):
         f"• Costos por Cultivo — Nogales, Cerezos, Avellanos\n"
         f"• Exportaciones — Espana, comparacion anual\n"
         f"• Finanzas — Banco y Caja Chica\n"
+        f"• Conciliación — `http://localhost:{port}/conciliacion`\n"
         f"• Inventario — Stock de insumos\n"
         f"• Personal — Vacaciones pendientes\n"
         f"• Tareas — Bitacora y seguimiento\n"
@@ -121,6 +123,17 @@ async def cmd_banco(update, context):
             await msg.edit_text(texto, parse_mode="Markdown")
         except Exception:
             await msg.edit_text(texto)
+    except CaptchaRequerido:
+        # El bot no resuelve CAPTCHAs: se explica la vía manual, que sí funciona.
+        await msg.edit_text(
+            "🔐 *El banco pide un CAPTCHA para entrar*\n\n"
+            "No puedo pasarlo: esa verificación está puesta para impedir el "
+            "acceso automático y saltarla arriesga que bloqueen la cuenta.\n\n"
+            "*Hagámoslo así:*\n"
+            "1️⃣ Entra al portal y descarga la cartola\n"
+            "2️⃣ Mándame el archivo por acá (CSV, TXT o Excel)\n"
+            "3️⃣ Te muestro un preview y lo importo sin duplicar",
+            parse_mode="Markdown")
     except ImportError:
         await msg.edit_text("❌ Playwright no está instalado.\n"
                              "Ejecuta: pip install playwright && playwright install chromium")
@@ -153,9 +166,54 @@ async def _sync_banco_core() -> str:
     return texto
 
 
+def _aviso_banco_manual(hora: str, motivo: str = "error",
+                         detalle: str = "") -> str:
+    """Mensaje para cuando el scraper no pudo actualizar el banco.
+
+    Pase lo que pase termina pidiendo la cartola: es la vía que sí funciona, y
+    la única salida cuando el banco pone verificación anti-robot. Antes el
+    camino del error genérico solo reportaba la falla y dejaba al dueño sin
+    saber qué hacer.
+    """
+    detalle = (detalle or "")[:400]
+    low = detalle.lower()
+    if motivo == "captcha":
+        cabecera = (
+            f"🔐 *El banco pidió verificación anti-robot* ({hora})\n\n"
+            "No la voy a saltar: existe justamente para impedir el acceso "
+            "automático, y forzarla arriesga que te *bloqueen la cuenta*.")
+        pista = ""
+    else:
+        cabecera = (f"🔴 *No pude actualizar el banco solo* ({hora})\n\n"
+                    f"`{detalle}`")
+        if any(k in low for k in ("no encontré el campo", "selector", "timeout")):
+            pista = ("\n\n💡 Puede que el banco haya cambiado su *página*. "
+                     "Avísame y reviso los selectores.")
+        elif "credenciales" in low or "login" in low:
+            pista = "\n\n💡 Revisa las credenciales del banco en el `.env`."
+        elif any(k in low for k in ("executable", "playwright", "browser")):
+            pista = ("\n\n💡 Falta el navegador: corre "
+                     "`python -m playwright install chromium`.")
+        else:
+            pista = ""
+
+    return (
+        f"{cabecera}{pista}\n\n"
+        "*Mándame la cartola y la subo yo:*\n"
+        "1️⃣ Entra al portal y descarga la cartola\n"
+        "2️⃣ Mándame el archivo por acá (Excel, CSV o TXT)\n"
+        "3️⃣ Te muestro un preview y la importo sin duplicar nada\n\n"
+        "_Vuelvo a intentarlo solo el próximo viernes._")
+
+
 async def job_sync_banco(context: ContextTypes.DEFAULT_TYPE):
-    """Job programado: sincroniza banco y envia notificacion."""
-    chat_id = context.bot_data.get("banco_chat_id") or TELEGRAM_CHAT_ID
+    """Job SEMANAL (viernes am): sincroniza el banco y avisa al dueño.
+
+    Corre una vez por semana porque el scraper es frágil: si falla, el camino
+    bueno es que el dueño mande la cartola, no que el bot siga reintentando.
+    """
+    chat_id = (context.bot_data.get("owner_chat_id")
+               or context.bot_data.get("banco_chat_id") or TELEGRAM_CHAT_ID)
     if not chat_id:
         logger.warning("Job banco: no hay chat_id configurado.")
         return
@@ -169,8 +227,32 @@ async def job_sync_banco(context: ContextTypes.DEFAULT_TYPE):
                                             parse_mode="Markdown")
         except Exception:
             await context.bot.send_message(chat_id=chat_id, text=texto)
+    except CaptchaRequerido as e:
+        # El banco puso verificación anti-robot: el scraper no va a volver a
+        # funcionar solo. No se reintenta; se pide la cartola, que sí funciona.
+        logger.warning(f"Job banco: CAPTCHA en el login — {e}")
+        await _avisar_caida(context, chat_id, hora, "captcha", str(e))
     except Exception as e:
+        # Si la sincronización falla hay que ENTERARSE, no solo dejarlo en el log:
+        # así fue como pasó desapercibido que el banco cambió su página de login.
         logger.error(f"Job banco falló: {e}")
+        await _avisar_caida(context, chat_id, hora, "error", str(e))
+
+
+async def _avisar_caida(context, chat_id: int, hora: str,
+                         motivo: str, detalle: str) -> None:
+    """Manda el aviso pidiendo la cartola, con fallback sin Markdown."""
+    aviso = _aviso_banco_manual(hora, motivo=motivo, detalle=detalle)
+    try:
+        await context.bot.send_message(chat_id=chat_id, text=aviso,
+                                        parse_mode="Markdown")
+    except Exception:
+        # Markdown roto por el detalle del error: mandarlo plano igual, porque
+        # quedarse callado es peor que mandarlo feo.
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=("No pude actualizar el banco solo. Descarga la cartola del "
+                  "portal y mándamela por acá para importarla."))
 
 
 # ── Callback /reporte ────────────────────────────

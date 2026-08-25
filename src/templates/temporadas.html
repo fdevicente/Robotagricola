@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Resumen por Temporada — Agrícola Santa Elisa</title>
+<style>
+body { font-family: -apple-system, Arial, sans-serif; margin: 0; background: #f5f5f5; color: #333; }
+.header { background: #2c3e50; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; }
+.header h1 { margin: 0; font-size: 20px; }
+.header a { color: #95d5d3; margin-left: 16px; text-decoration: none; font-size: 13px; }
+.header a:hover { text-decoration: underline; }
+.container { padding: 20px; max-width: 1500px; margin: 0 auto; }
+.controls { background: white; padding: 16px 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+.controls label { font-size: 13px; color: #555; font-weight: 600; }
+.controls select { padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; min-width: 140px; }
+.controls button { padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+.controls button:hover { background: #2980b9; }
+.controls button.active { background: #27ae60; }
+
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+.kpi { background: white; padding: 14px 18px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.kpi-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+.kpi-value { font-size: 22px; font-weight: bold; margin-top: 4px; color: #2c3e50; }
+.kpi-value.pos { color: #27ae60; }
+.kpi-value.neg { color: #e74c3c; }
+.kpi-sub { font-size: 11px; color: #aaa; margin-top: 2px; }
+
+.col-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.card { background: white; padding: 16px 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.card h2 { margin: 0 0 12px 0; font-size: 14px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+table th { text-align: left; padding: 6px 10px; background: #f8f9fa; color: #666; font-weight: 600; font-size: 11px; text-transform: uppercase; }
+table td { padding: 6px 10px; border-bottom: 1px solid #eee; }
+table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.bar { display: inline-block; height: 8px; background: #3498db; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.bar.ingreso { background: #27ae60; }
+.bar.egreso { background: #e74c3c; }
+
+.compare-mode .single-view { display: none; }
+.compare-mode .compare-view { display: block; }
+.compare-view { display: none; }
+.compare-view .col-grid { grid-template-columns: 1fr 1fr; gap: 16px; }
+.compare-view .kpi-grid { grid-template-columns: repeat(4, 1fr); }
+.compare-view .compare-header { background: #34495e; color: white; padding: 10px 14px; border-radius: 6px 6px 0 0; font-weight: bold; font-size: 14px; margin-bottom: -8px; }
+.delta { font-size: 11px; padding: 2px 6px; border-radius: 3px; margin-left: 6px; }
+.delta.pos { background: #d5f4e6; color: #27ae60; }
+.delta.neg { background: #fadbd8; color: #e74c3c; }
+.loading { text-align: center; padding: 40px; color: #888; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Resumen por Temporada</h1>
+  <div>
+    <a href="/">← General</a>
+    <a href="/cash-flow">Cash Flow</a>
+    <a href="/banco/revisar">Banco REVISAR</a>
+  </div>
+</div>
+<div class="container">
+
+  <div class="controls">
+    <label>Temporada:</label>
+    <select id="t1">
+      {% for t in temporadas %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+    </select>
+    <button id="btn-single" class="active" onclick="setMode('single')">Vista única</button>
+
+    <span style="border-left:1px solid #ddd; height:24px; margin: 0 8px;"></span>
+
+    <button id="btn-compare" onclick="setMode('compare')">Comparar con:</button>
+    <select id="t2">
+      {% for t in temporadas %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+    </select>
+  </div>
+
+  <div id="content" class="single-view">
+    <div class="loading">Cargando...</div>
+  </div>
+
+</div>
+
+<script>
+const TEMPS = {{ temporadas | tojson }};
+let mode = 'single';
+
+function fmt(n) { return '$' + Math.round(n).toLocaleString('es-CL'); }
+function fmtM(n) {
+  if (Math.abs(n) >= 1e9) return '$' + (n/1e9).toFixed(2) + 'B';
+  if (Math.abs(n) >= 1e6) return '$' + (n/1e6).toFixed(1) + 'M';
+  if (Math.abs(n) >= 1e3) return '$' + (n/1e3).toFixed(0) + 'K';
+  return '$' + Math.round(n);
+}
+
+function setMode(m) {
+  mode = m;
+  document.getElementById('btn-single').classList.toggle('active', m === 'single');
+  document.getElementById('btn-compare').classList.toggle('active', m === 'compare');
+  load();
+}
+
+function kpi(label, value, sub, cls) {
+  return `<div class="kpi"><div class="kpi-label">${label}</div>
+    <div class="kpi-value ${cls || ''}">${value}</div>
+    ${sub ? `<div class="kpi-sub">${sub}</div>` : ''}</div>`;
+}
+
+function tablaCat(items, claseBar) {
+  if (!items || !items.length) return '<p style="color:#999">Sin datos</p>';
+  const max = Math.max(...items.map(x => x.monto));
+  let html = '<table>';
+  for (const it of items) {
+    const w = max > 0 ? Math.round((it.monto / max) * 100) : 0;
+    html += `<tr><td>${it.categoria || it.cultivo}</td>
+      <td class="num"><span class="bar ${claseBar}" style="width:${w}px"></span>${fmtM(it.monto)}</td></tr>`;
+  }
+  return html + '</table>';
+}
+
+function renderSingle(data) {
+  const saldoCls = data.saldo_neto >= 0 ? 'pos' : 'neg';
+  return `
+    <div class="kpi-grid">
+      ${kpi('Total ingresos', fmtM(data.total_ingresos), `${data.abonos_banco_count} abonos`, 'pos')}
+      ${kpi('Total egresos', fmtM(data.total_egresos), `${data.total_facturas} facturas + ${data.cargos_banco_count} cargos`, 'neg')}
+      ${kpi('Saldo neto', fmtM(data.saldo_neto), '', saldoCls)}
+      ${kpi('Facturas', data.total_facturas, fmt(data.total_facturas_monto))}
+    </div>
+    <div class="col-grid">
+      <div class="card">
+        <h2>Top Categorías Egreso</h2>
+        ${tablaCat(data.top_egresos_cat, 'egreso')}
+      </div>
+      <div class="card">
+        <h2>Top Categorías Ingreso</h2>
+        ${tablaCat(data.top_ingresos_cat, 'ingreso')}
+      </div>
+    </div>
+    <div class="card">
+      <h2>Egresos por Cultivo</h2>
+      ${tablaCat(data.egresos_por_cultivo, 'egreso')}
+    </div>
+  `;
+}
+
+function deltaBadge(a, b) {
+  if (!b) return '';
+  const pct = ((a - b) / Math.abs(b)) * 100;
+  const cls = pct >= 0 ? 'pos' : 'neg';
+  const sign = pct >= 0 ? '+' : '';
+  return `<span class="delta ${cls}">${sign}${pct.toFixed(0)}%</span>`;
+}
+
+function renderCompare(d1, d2) {
+  return `
+    <div class="kpi-grid">
+      ${kpi('Ingresos T1', fmtM(d1.total_ingresos), d1.temporada, 'pos')}
+      ${kpi('Ingresos T2', fmtM(d2.total_ingresos) + deltaBadge(d2.total_ingresos, d1.total_ingresos), d2.temporada, 'pos')}
+      ${kpi('Egresos T1', fmtM(d1.total_egresos), d1.temporada, 'neg')}
+      ${kpi('Egresos T2', fmtM(d2.total_egresos) + deltaBadge(d2.total_egresos, d1.total_egresos), d2.temporada, 'neg')}
+    </div>
+    <div class="kpi-grid">
+      ${kpi('Saldo T1', fmtM(d1.saldo_neto), '', d1.saldo_neto >= 0 ? 'pos' : 'neg')}
+      ${kpi('Saldo T2', fmtM(d2.saldo_neto), '', d2.saldo_neto >= 0 ? 'pos' : 'neg')}
+      ${kpi('Facturas T1', d1.total_facturas, fmt(d1.total_facturas_monto))}
+      ${kpi('Facturas T2', d2.total_facturas, fmt(d2.total_facturas_monto))}
+    </div>
+    <div class="col-grid">
+      <div class="card">
+        <h2>${d1.temporada} — Top Egresos</h2>
+        ${tablaCat(d1.top_egresos_cat, 'egreso')}
+      </div>
+      <div class="card">
+        <h2>${d2.temporada} — Top Egresos</h2>
+        ${tablaCat(d2.top_egresos_cat, 'egreso')}
+      </div>
+    </div>
+    <div class="col-grid">
+      <div class="card">
+        <h2>${d1.temporada} — Por Cultivo</h2>
+        ${tablaCat(d1.egresos_por_cultivo, 'egreso')}
+      </div>
+      <div class="card">
+        <h2>${d2.temporada} — Por Cultivo</h2>
+        ${tablaCat(d2.egresos_por_cultivo, 'egreso')}
+      </div>
+    </div>
+  `;
+}
+
+async function load() {
+  const el = document.getElementById('content');
+  el.innerHTML = '<div class="loading">Cargando...</div>';
+  const t1 = document.getElementById('t1').value;
+  const t2 = document.getElementById('t2').value;
+  if (mode === 'single') {
+    const r = await fetch(`/api/temporada/${encodeURIComponent(t1)}`);
+    const data = await r.json();
+    el.innerHTML = renderSingle(data);
+  } else {
+    const r = await fetch(`/api/temporadas/comparar?t1=${encodeURIComponent(t1)}&t2=${encodeURIComponent(t2)}`);
+    const { temp1, temp2 } = await r.json();
+    el.innerHTML = renderCompare(temp1, temp2);
+  }
+}
+
+// Default: T1 = más reciente, T2 = anterior
+if (TEMPS.length >= 2) {
+  document.getElementById('t2').value = TEMPS[1];
+}
+document.getElementById('t1').addEventListener('change', load);
+document.getElementById('t2').addEventListener('change', load);
+load();
+</script>
+</body>
+</html>

@@ -5,10 +5,14 @@ from unittest.mock import patch
 
 @pytest.fixture
 def client():
+    """Cliente autenticado: el dashboard exige login en todas las rutas."""
     import sys, os
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-    from dashboard import app
-    return app.test_client()
+    import dashboard
+    c = dashboard.app.test_client()
+    # Se entra con el token interno (el mismo que usa el generador de PDF)
+    c.environ_base["HTTP_X_DASHBOARD_TOKEN"] = dashboard.TOKEN_INTERNO
+    return c
 
 
 def test_cash_flow_endpoint_returns_json(client):

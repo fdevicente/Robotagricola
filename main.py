@@ -11,9 +11,10 @@ from datetime import datetime, time as dtime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder, CommandHandler,
-    MessageHandler, CallbackQueryHandler,
-    filters, ContextTypes
+    MessageHandler, CallbackQueryHandler, TypeHandler,
+    PicklePersistence, filters, ContextTypes
 )
+from infrastructure import bot_state
 
 from config import TELEGRAM_TOKEN, DOWNLOAD_DIR, BOLETAS_DIR, EXCEL_PATH, TELEGRAM_CHAT_ID
 from processors.extractor import process_file
@@ -70,10 +71,111 @@ from handlers.facturas import (
     _rut_existe, _agregar_proveedor,
 )
 
+# ── HEARTBEAT / RECONEXIÓN ────────────────────
+async def _track_activity(update, context):
+    """Registra el último update procesado (heartbeat). Corre en group=-1.
+
+    Debe dejar pasar el update a los demás handlers, por eso no detiene la
+    propagación (no levanta ApplicationHandlerStop).
+
+    Acá también se respalda el mensaje CRUDO, antes de que ningún handler lo
+    interprete: es el único registro de lo que realmente llegó. Sin esto, un
+    mensaje que se pierde (pasó el 24-ago-2026) no deja rastro para diagnosticar.
+    """
+    from modules.telegram_backup import guardar_update
+    guardar_update(update)          # nunca lanza; si falla, solo lo loguea
+
+    try:
+        chat_id = update.effective_chat.id if update.effective_chat else None
+        # Resumen breve del contenido para el log de estado
+        resumen = ""
+        msg = update.effective_message
+        if msg:
+            if msg.document:
+                resumen = f"documento: {msg.document.file_name}"
+            elif msg.photo:
+                resumen = "foto/imagen"
+            elif msg.text:
+                resumen = msg.text[:60]
+        bot_state.guardar_actividad(update_id=update.update_id,
+                                     chat_id=chat_id, resumen=resumen)
+        # Recordar último chat activo para avisos de reconexión
+        if chat_id:
+            context.bot_data["ultimo_chat_activo"] = chat_id
+    except Exception as e:
+        logger.warning(f"track_activity: {e}")
+
+
+async def job_latido(context):
+    """Deja constancia de que el proceso está vivo (cada 5 min, en silencio)."""
+    bot_state.guardar_latido()
+
+
+# Menú que Telegram le muestra a CUALQUIERA que escriba "/" en el chat.
+# Sin esto no aparece ninguna sugerencia y hay que saberse los comandos de
+# memoria: por eso a Juan "no le salía" /personal. Se registra en cada arranque.
+COMANDOS_MENU = [
+    ("bitacora", "Registrar la actividad del día"),
+    ("maquinaria", "Horómetro, mantención o ficha de máquina"),
+    ("inventario", "Ver stock de insumos"),
+    ("uso", "Registrar uso de un insumo"),
+    ("vencimientos", "Insumos por vencer"),
+    ("bodega", "Chequeo de bodega"),
+    ("tarea", "Crear una tarea"),
+    ("tareas", "Ver tareas pendientes"),
+    ("hecho", "Marcar una tarea como lista"),
+    ("personal", "Ver personal y días de vacaciones"),
+    ("vacaciones", "Registrar vacaciones de alguien"),
+    ("saldo", "Saldo de caja chica"),
+    ("deposito", "Depositar en caja chica"),
+    ("pagado", "Registrar el pago de una factura"),
+    ("reporte", "Reporte diario, semanal o mensual"),
+    ("cancelar", "Cancelar lo que se está haciendo"),
+    ("ayuda", "Ver todo lo que puedo hacer"),
+]
+
+
+async def _post_init(app):
+    """Tras inicializar el bot: registrar el menú y avisar si estuvo caído.
+
+    El corte se mide con el latido, no con el último mensaje recibido: un fin
+    de semana sin que nadie escriba no es una caída.
+    Telegram entrega los pendientes (<24h) porque run_polling usa
+    drop_pending_updates=False; este aviso solo informa.
+    """
+    try:
+        from telegram import BotCommand
+        await app.bot.set_my_commands(
+            [BotCommand(c, d) for c, d in COMANDOS_MENU])
+        logger.info(f"Menú de comandos registrado ({len(COMANDOS_MENU)}).")
+    except Exception as e:
+        logger.warning(f"No pude registrar el menú de comandos: {e}")
+
+    msg = bot_state.mensaje_reconexion()
+    bot_state.guardar_latido()      # arranca el latido de inmediato
+    if not msg:
+        return
+    # Destino: dueño si está fijado (/soydueno); si no, último chat activo o banco
+    chat_id = (app.bot_data.get("owner_chat_id")
+               or app.bot_data.get("ultimo_chat_activo")
+               or app.bot_data.get("banco_chat_id")
+               or TELEGRAM_CHAT_ID)
+    if not chat_id:
+        logger.info(f"Reconexión sin chat destino. {msg}")
+        return
+    try:
+        await app.bot.send_message(chat_id=chat_id, text=msg, parse_mode="Markdown")
+    except Exception as e:
+        logger.warning(f"No pude enviar aviso de reconexión: {e}")
+
+
 # ── COMANDOS ──────────────────────────────────
 async def cmd_start(update, context):
-    # Guardar chat_id para jobs automáticos
-    context.bot_data["banco_chat_id"] = update.effective_chat.id
+    # Guardar chat_id para jobs automáticos SOLO si aún no está fijado
+    # (evita que cualquier usuario nuevo secuestre el destino de los avisos;
+    #  para re-apuntarlo a propósito: correr /banco en el chat deseado)
+    if not context.bot_data.get("banco_chat_id"):
+        context.bot_data["banco_chat_id"] = update.effective_chat.id
     await update.message.reply_text(
         "👋 ¡Hola! Soy el bot de *Agrícola Santa Elisa*.\n\n"
         "📲 Envíame una *foto* o *PDF* de una factura.\n"
@@ -116,6 +218,23 @@ from handlers.personal import (
     cmd_personal, cmd_vacaciones, cmd_agregar_trabajador,
     handle_text_vacacion, handle_text_trabajador, job_vacaciones_mensuales,
 )
+# Vencimientos de insumos (fechas diferidas + alertas)
+from handlers.vencimientos import (
+    cmd_vencimientos, handle_text_vencimiento,
+    cb_venc_novence, cb_venc_skip, cb_venc_stop,
+)
+# Monitoreo del bot + mirror de actividad
+from handlers.monitoreo import (
+    cmd_soydueno, cmd_estado, mirror_update, job_heartbeat,
+    cmd_bodega, job_bodega_check, cmd_correlativos,
+    cmd_basedatos, job_sync_db,
+)
+# Conciliación bancaria con IA
+from handlers.conciliacion import (
+    cmd_conciliar, cb_conc_apply, cb_conc_cancel,
+)
+# Carga manual de la cartola del banco
+from handlers.banco_upload import cb_cart_import, cb_cart_cancel
 
 
 async def cmd_cancelar(update, context):
@@ -150,8 +269,13 @@ async def cmd_deshacer(update, context):
 
 # ── TAREAS Y BITÁCORA ────────────────────────
 from handlers.tareas import (
-    cmd_tarea, cmd_tareas, cmd_hecho, cmd_bitacora,
-    cb_tarea_prioridad, handle_text_tarea, handle_text_bitacora,
+    cmd_tarea, cmd_tareas, cmd_hecho,
+    cb_tarea_prioridad, handle_text_tarea,
+)
+# Bitácora estructurada con IA (reemplaza el flujo viejo de handlers.tareas)
+from handlers.bitacora import (
+    cmd_bitacora, handle_text_bitacora,
+    cb_bita_save, cb_bita_edit, cb_bita_cancel,
 )
 
 # ── INVENTARIO ───────────────────────────────
@@ -181,8 +305,23 @@ from handlers.chat import handle_text as handle_text_edit
 def main():
     if not TELEGRAM_TOKEN:
         logger.error("TELEGRAM_TOKEN no configurado"); return
+    # Persistencia: mantiene user_data (cola de facturas, factura en preview),
+    # chat_data y bot_data (banco_chat_id) entre reinicios del bot.
+    _persist_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".bot_persistence.pickle")
+    persistence = PicklePersistence(filepath=_persist_path)
+
     app = (ApplicationBuilder().token(TELEGRAM_TOKEN)
+           .persistence(persistence)
+           .post_init(_post_init)
            .read_timeout(120).write_timeout(120).connect_timeout(120).pool_timeout(120).build())
+
+    # Tracker de actividad: corre PRIMERO para cada update (group=-1) y registra
+    # el último mensaje procesado (heartbeat persistente).
+    app.add_handler(TypeHandler(Update, _track_activity), group=-1)
+    # Mirror: reenvía al dueño todo lo que mandan los demás.
+    # OJO: en PTB solo corre UN handler por grupo → debe ir en un grupo propio
+    # (en group=-1 junto al tracker jamás se ejecutaría).
+    app.add_handler(TypeHandler(Update, mirror_update), group=-2)
 
     # Comandos
     app.add_handler(CommandHandler("start",    cmd_start))
@@ -195,6 +334,14 @@ def main():
     app.add_handler(CommandHandler("dashboard", cmd_dashboard))
     app.add_handler(CommandHandler("banco",    cmd_banco))
     app.add_handler(CommandHandler("cancelar", cmd_cancelar))
+    # Monitoreo / visibilidad
+    app.add_handler(CommandHandler("soydueno", cmd_soydueno))
+    app.add_handler(CommandHandler("estado",   cmd_estado))
+    app.add_handler(CommandHandler("bodega",   cmd_bodega))
+    app.add_handler(CommandHandler("correlativos", cmd_correlativos))
+    app.add_handler(CommandHandler("basedatos", cmd_basedatos))
+    # Conciliación bancaria
+    app.add_handler(CommandHandler("conciliar", cmd_conciliar))
     # Cash Flow (Fase 1)
     from handlers.cash_flow_cmds import cmd_proyeccion, cmd_categoria, cosecha_conv
     app.add_handler(CommandHandler("proyeccion", cmd_proyeccion))
@@ -205,12 +352,18 @@ def main():
     app.add_handler(CommandHandler("tareas",   cmd_tareas))
     app.add_handler(CommandHandler("hecho",    cmd_hecho))
     app.add_handler(CommandHandler("bitacora", cmd_bitacora))
+    # Maquinaria: horómetros, fichas y mantenciones
+    from handlers.maquinaria import cb_maquinaria_fin, cmd_maquinaria
+    app.add_handler(CommandHandler("maquinaria", cmd_maquinaria))
+    app.add_handler(CommandHandler("maquina",    cmd_maquinaria))
+    app.add_handler(CallbackQueryHandler(cb_maquinaria_fin, pattern="^maq_fin$"))
     # Inventario
     app.add_handler(CommandHandler("inventario", cmd_inventario))
     app.add_handler(CommandHandler("uso",      cmd_uso))
     # Personal y Vacaciones
     app.add_handler(CommandHandler("personal",  cmd_personal))
     app.add_handler(CommandHandler("vacaciones", cmd_vacaciones))
+    app.add_handler(CommandHandler("vencimientos", cmd_vencimientos))
     app.add_handler(CommandHandler("agregar_trabajador", cmd_agregar_trabajador))
     # Mensajes
     app.add_handler(MessageHandler(filters.Document.ALL,            handle_document))
@@ -231,6 +384,16 @@ def main():
     app.add_handler(CallbackQueryHandler(cb_calce_verificacion, pattern="^calce_"))
     app.add_handler(CallbackQueryHandler(cb_reporte,           pattern="^rep_"))
     app.add_handler(CallbackQueryHandler(cb_tarea_prioridad,   pattern="^prior_"))
+    app.add_handler(CallbackQueryHandler(cb_bita_save,         pattern="^bita_save$"))
+    app.add_handler(CallbackQueryHandler(cb_bita_edit,         pattern="^bita_edit$"))
+    app.add_handler(CallbackQueryHandler(cb_bita_cancel,       pattern="^bita_cancel$"))
+    app.add_handler(CallbackQueryHandler(cb_cart_import,       pattern="^cart_import$"))
+    app.add_handler(CallbackQueryHandler(cb_cart_cancel,       pattern="^cart_cancel$"))
+    app.add_handler(CallbackQueryHandler(cb_conc_apply,        pattern="^conc_apply$"))
+    app.add_handler(CallbackQueryHandler(cb_conc_cancel,       pattern="^conc_cancel$"))
+    app.add_handler(CallbackQueryHandler(cb_venc_novence,      pattern="^venc_novence$"))
+    app.add_handler(CallbackQueryHandler(cb_venc_skip,         pattern="^venc_skip$"))
+    app.add_handler(CallbackQueryHandler(cb_venc_stop,         pattern="^venc_stop$"))
     app.add_handler(CallbackQueryHandler(cb_cultivo,           pattern="^cult_"))
     app.add_handler(CallbackQueryHandler(cb_select_item,       pattern="^selitem_"))
     app.add_handler(CallbackQueryHandler(cb_edit_field,        pattern="^edit_"))
@@ -240,31 +403,76 @@ def main():
     except: pass
     try: crear_hojas_tareas()
     except: pass
+    try:
+        from bitacora_manager import crear_hoja_bitacora
+        crear_hoja_bitacora()  # migra al esquema ampliado si es necesario
+    except Exception as e:
+        logger.warning(f"crear_hoja_bitacora: {e}")
     try: crear_hojas_inventario()
     except: pass
+    try:
+        from vencimientos_manager import crear_hoja_vencimientos
+        crear_hoja_vencimientos()
+    except Exception as e:
+        logger.warning(f"crear_hoja_vencimientos: {e}")
     try: crear_hojas_vacaciones()
     except: pass
 
-    # Programar sincronización bancaria automática: 8:00 y 18:00 hora Chile
+    # Sincronización bancaria: VIERNES 08:00 hora Chile, una vez por semana.
+    # Antes corría 08:00 y 18:00 todos los días. El scraper es frágil (Akamai lo
+    # tumbó en agosto-2026), así que en vez de insistir se intenta una vez y, si
+    # falla, el bot pide la cartola — que es la vía que siempre funciona.
+    # ⚠️ En PTB >= 20 `days` va de 0=domingo a 6=sábado: VIERNES ES 5.
+    #    Con el mapeo viejo (0=lunes) days=(4,) era viernes; hoy sería jueves.
     try:
         from zoneinfo import ZoneInfo
     except ImportError:
         from backports.zoneinfo import ZoneInfo
     tz_chile = ZoneInfo("America/Santiago")
-    app.job_queue.run_daily(job_sync_banco, time=dtime(hour=8,  minute=0, tzinfo=tz_chile), name="banco_8am")
-    app.job_queue.run_daily(job_sync_banco, time=dtime(hour=18, minute=0, tzinfo=tz_chile), name="banco_6pm")
+    app.job_queue.run_daily(job_sync_banco,
+                            time=dtime(hour=8, minute=0, tzinfo=tz_chile),
+                            days=(5,), name="banco_viernes")
     # Actualizar días de vacaciones el 1ro de cada mes
     app.job_queue.run_monthly(job_vacaciones_mensuales, when=dtime(hour=7, minute=0, tzinfo=tz_chile),
                               day=1, name="vacaciones_mensuales")
-    # Resumen semanal cash flow: lunes 08:00
-    from handlers.cash_flow_jobs import job_resumen_semanal
+    # Resumen semanal cash flow: LUNES 08:00.
+    # ⚠️ days=(1,) es lunes. Estuvo en days=(0,) — DOMINGO — desde el salto a
+    # PTB 20+, que invirtió el mapeo. Corregido 2026-08-24.
+    from handlers.cash_flow_jobs import job_resumen_semanal, job_reporte_mensual
     app.job_queue.run_daily(job_resumen_semanal,
                               time=dtime(hour=8, minute=0, tzinfo=tz_chile),
-                              days=(0,), name="resumen_semanal")
-    logger.info("⏰ Jobs programados: banco 08:00/18:00, vacaciones día 1, resumen lunes 08:00")
+                              days=(1,), name="resumen_semanal")
+    # Reporte mensual PDF: día 1 de cada mes, 08:00
+    app.job_queue.run_monthly(job_reporte_mensual,
+                              when=dtime(hour=8, minute=0, tzinfo=tz_chile),
+                              day=1, name="reporte_mensual")
+    # Heartbeat diario: 20:00 Chile → aviso "sigo vivo" + resumen al dueño
+    app.job_queue.run_daily(job_heartbeat,
+                            time=dtime(hour=20, minute=0, tzinfo=tz_chile),
+                            name="heartbeat")
+    # Latido silencioso cada 5 min: deja constancia de que el proceso vive.
+    # Sin esto, un fin de semana sin mensajes se reportaba como "62h apagado".
+    app.job_queue.run_repeating(job_latido, interval=300, first=10,
+                                name="latido")
+    # Chequeo semanal del Excel de bodega vs Master: LUNES 08:30 (avisa solo si
+    # NO calza). ⚠️ Mismo caso que el resumen: estuvo cayendo en DOMINGO por el
+    # days=(0,) heredado de PTB < 20. Corregido 2026-08-24.
+    app.job_queue.run_daily(job_bodega_check,
+                            time=dtime(hour=8, minute=30, tzinfo=tz_chile),
+                            days=(1,), name="bodega_check")
+    # Sync diaria Excel → base de datos (modo paralelo): 21:00, avisa si no calza
+    app.job_queue.run_daily(job_sync_db,
+                            time=dtime(hour=21, minute=0, tzinfo=tz_chile),
+                            name="sync_db")
+    logger.info("⏰ Jobs programados: banco VIERNES 08:00, vacaciones día 1, "
+                "resumen LUNES 08:00, reporte mensual día 1, heartbeat 20:00, "
+                "bodega LUNES 08:30")
 
     logger.info("✅ Bot iniciado. Esperando mensajes...")
-    app.run_polling()
+    # drop_pending_updates=False → procesa los mensajes que llegaron mientras
+    # el bot estuvo apagado (Telegram los retiene hasta 24h con polling).
+    app.run_polling(drop_pending_updates=False,
+                    allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
     main()

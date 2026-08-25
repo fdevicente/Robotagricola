@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>General — Agrícola Santa Elisa</title>
+<style>
+* { box-sizing: border-box; }
+body { font-family: -apple-system, Arial, sans-serif; margin: 0; background: #f5f6f8; color: #2c3e50; font-size: 14px; }
+.header { background: #1a2a3a; color: white; padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; }
+.header h1 { margin: 0; font-size: 20px; font-weight: 600; }
+.header h1 span { color: #5dade2; }
+.header a { color: #95d5d3; margin-left: 18px; text-decoration: none; font-size: 13px; }
+.header a:hover { color: white; }
+.header .date { color: #95a5a6; font-size: 13px; margin-left: 12px; }
+
+.container { padding: 18px 24px; max-width: 1700px; margin: 0 auto; }
+
+/* Selector temporada */
+.bar { background: white; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.bar label { font-weight: 600; font-size: 12px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; }
+.bar select { padding: 7px 12px; border: 1px solid #cdd; border-radius: 5px; font-size: 14px; min-width: 130px; }
+.bar .vs { color: #888; font-weight: 600; }
+
+/* KPIs */
+.kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px; }
+.kpi { background: white; padding: 14px 16px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.kpi-label { font-size: 11px; color: #95a5a6; text-transform: uppercase; letter-spacing: 0.4px; }
+.kpi-value { font-size: 22px; font-weight: 700; margin-top: 6px; }
+.kpi-value.pos { color: #27ae60; }
+.kpi-value.neg { color: #e74c3c; }
+.kpi-delta { font-size: 11px; margin-top: 4px; padding: 2px 6px; border-radius: 3px; display: inline-block; }
+.kpi-delta.pos { background: #d4f4dd; color: #1e8449; }
+.kpi-delta.neg { background: #fadbd8; color: #c0392b; }
+.kpi-sub { font-size: 11px; color: #aaa; margin-top: 2px; }
+
+/* Grids */
+.row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.card { background: white; padding: 14px 16px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.card h2 { margin: 0 0 12px 0; font-size: 12px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; }
+.card h2 .count { background: #34495e; color: white; padding: 1px 8px; border-radius: 10px; margin-left: 6px; font-size: 11px; }
+.card h2 .count.danger { background: #c0392b; }
+.card h2 .count.warning { background: #e67e22; }
+
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th { text-align: left; padding: 6px 8px; background: #f8f9fa; color: #666; font-weight: 600; font-size: 10px; text-transform: uppercase; }
+td { padding: 6px 8px; border-bottom: 1px solid #eee; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+tr:hover td { background: #fafbfc; }
+.dias-venc { color: #c0392b; font-weight: 600; }
+.dias-prox { color: #f39c12; font-weight: 600; }
+
+/* Flujo mensual */
+.flujo-wrap { overflow-x: auto; }
+table.flujo { font-size: 11px; }
+table.flujo th, table.flujo td { padding: 4px 6px; white-space: nowrap; }
+table.flujo th.mes { text-align: right; min-width: 70px; }
+table.flujo td.mes-val { text-align: right; font-variant-numeric: tabular-nums; }
+table.flujo td.mes-val.actual { background: #fff3cd; font-weight: 600; }
+table.flujo tr.cat-row { cursor: pointer; }
+table.flujo tr.cat-row:hover { background: #f0f7ff; }
+table.flujo tr.cat-row.expanded { background: #e3f2fd; font-weight: 600; }
+table.flujo tr.detalle-row { background: #f8f9fa; font-size: 10px; color: #666; display: none; }
+table.flujo tr.detalle-row.show { display: table-row; }
+table.flujo tr.total-row { background: #34495e; color: white; font-weight: 700; }
+table.flujo tr.total-row td { padding: 8px 6px; border: none; }
+table.flujo tr.ingresos-row { background: #d4f4dd; color: #1e8449; font-weight: 700; }
+.expand-icon { display: inline-block; width: 12px; color: #888; }
+
+.loading { text-align: center; padding: 40px; color: #888; }
+.cult-bar { display: inline-block; height: 8px; background: #3498db; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+.cult-bar.NOGALES { background: #8b4513; }
+.cult-bar.CEREZOS { background: #c0392b; }
+.cult-bar.AVELLANOS { background: #f39c12; }
+.cult-bar.GENERAL { background: #7f8c8d; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1><span>Agricola</span> Santa Elisa</h1>
+  <div>
+    <a href="/temporadas">Por Temporada</a>
+    <a href="/cash-flow">Cash Flow</a>
+    <a href="/banco/revisar">Banco REVISAR</a>
+    <a href="/vacaciones">👷 Vacaciones</a>
+    <span class="date" id="hoy"></span>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="bar">
+    <label>Temporada:</label>
+    <select id="t1">{% for t in temporadas %}<option value="{{ t }}">{{ t }}</option>{% endfor %}</select>
+    <span class="vs">vs</span>
+    <select id="t2">{% for t in temporadas %}<option value="{{ t }}">{{ t }}</option>{% endfor %}</select>
+    <label style="margin-left:20px">Caja total:</label>
+    <strong id="saldo-banco" style="color:#27ae60;font-size:16px">—</strong>
+    <span id="saldo-fecha" style="color:#888;font-size:11px"></span>
+    <span id="saldo-desglose" style="color:#888;font-size:11px"></span>
+  </div>
+
+  <!-- KPIs comparados -->
+  <div class="kpis" id="kpis">
+    <div class="loading">Cargando...</div>
+  </div>
+
+  <!-- Facturas: total + vencidas + próximas -->
+  <div class="row-3" id="facturas-grid"></div>
+
+  <!-- Flujo proyectado -->
+  <div class="card">
+    <h2>Flujo Proyectado por Mes — Desglose por Categoría</h2>
+    <div class="flujo-wrap" id="flujo-wrap"><div class="loading">Cargando flujo...</div></div>
+  </div>
+
+</div>
+
+<script>
+const TEMPS = {{ temporadas | tojson }};
+
+function fmt(n) {
+  if (n === 0 || !n) return '-';
+  if (Math.abs(n) >= 1e9) return '$' + (n/1e9).toFixed(2) + 'B';
+  if (Math.abs(n) >= 1e6) return '$' + (n/1e6).toFixed(1) + 'M';
+  if (Math.abs(n) >= 1e3) return '$' + Math.round(n/1e3) + 'K';
+  return '$' + Math.round(n).toLocaleString('es-CL');
+}
+function fmtFull(n) { return '$' + Math.round(n || 0).toLocaleString('es-CL'); }
+
+function deltaBadge(a, b) {
+  if (!b) return '';
+  const pct = ((a - b) / Math.abs(b)) * 100;
+  const cls = pct >= 0 ? 'pos' : 'neg';
+  const sign = pct >= 0 ? '+' : '';
+  return `<span class="kpi-delta ${cls}">${sign}${pct.toFixed(0)}%</span>`;
+}
+
+async function loadTemporada(t) {
+  const r = await fetch(`/api/temporada/${encodeURIComponent(t)}`);
+  return r.json();
+}
+
+async function loadFacturasTemp(t) {
+  const r = await fetch(`/api/facturas-temporada/${encodeURIComponent(t)}`);
+  return r.json();
+}
+
+async function loadAll() {
+  const t1 = document.getElementById('t1').value;
+  const t2 = document.getElementById('t2').value;
+  const [d1, d2, f1, saldo, flujo] = await Promise.all([
+    loadTemporada(t1), loadTemporada(t2),
+    loadFacturasTemp(t1),
+    fetch('/api/saldo-banco').then(r => r.json()),
+    fetch('/api/flujo-mensual').then(r => r.json()),
+  ]);
+
+  // Caja = cuenta corriente + cuenta dólar (a los exportadores se les cobra en USD)
+  const caja = saldo.caja || {};
+  document.getElementById('saldo-banco').textContent =
+    fmtFull(caja.total != null ? caja.total : saldo.saldo);
+  if (saldo.fecha) document.getElementById('saldo-fecha').textContent = `(al ${saldo.fecha})`;
+  const desglose = document.getElementById('saldo-desglose');
+  if (caja.total != null) {
+    const usd = (caja.usd || 0).toLocaleString('es-CL',
+      {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    desglose.textContent = ` · corriente ${fmtFull(caja.clp)} + dólar US$${usd}`;
+    if ((caja.avisos || []).length) {
+      desglose.textContent += ` · ⚠️ ${caja.avisos.join(' · ')}`;
+      desglose.style.color = '#c0392b';
+    }
+  }
+
+  // KPIs
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi">
+      <div class="kpi-label">Ingresos ${t1}</div>
+      <div class="kpi-value pos">${fmt(d1.total_ingresos)}</div>
+      <div class="kpi-sub">${d1.abonos_banco_count} abonos · vs ${t2}: ${fmt(d2.total_ingresos)} ${deltaBadge(d1.total_ingresos, d2.total_ingresos)}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Egresos ${t1}</div>
+      <div class="kpi-value neg">${fmt(d1.total_egresos)}</div>
+      <div class="kpi-sub">${d1.total_facturas} fact + ${d1.cargos_banco_count} cargos · vs ${t2}: ${fmt(d2.total_egresos)} ${deltaBadge(d1.total_egresos, d2.total_egresos)}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Saldo Neto ${t1}</div>
+      <div class="kpi-value ${d1.saldo_neto >= 0 ? 'pos' : 'neg'}">${fmt(d1.saldo_neto)}</div>
+      <div class="kpi-sub">vs ${t2}: ${fmt(d2.saldo_neto)} ${deltaBadge(d1.saldo_neto, d2.saldo_neto)}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Facturas ${t1}</div>
+      <div class="kpi-value">${f1.total}</div>
+      <div class="kpi-sub">${fmt(f1.monto)} · ${f1.pagadas} pagadas / ${f1.por_pagar} pendientes</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Vencidas</div>
+      <div class="kpi-value neg">${f1.total_vencidas}</div>
+      <div class="kpi-sub">${fmt(f1.total_vencidas_monto)}</div>
+    </div>
+  `;
+
+  // Facturas grids
+  document.getElementById('facturas-grid').innerHTML = `
+    <div class="card">
+      <h2>Facturas Vencidas <span class="count danger">${f1.total_vencidas}</span></h2>
+      ${renderFacturasTable(f1.vencidas, 'dias_vencido', 'venc')}
+    </div>
+    <div class="card">
+      <h2>Próximas a Vencer <span class="count warning">${f1.proximas.length}</span></h2>
+      ${renderFacturasTable(f1.proximas, 'dias_para_vencer', 'prox')}
+    </div>
+    <div class="card">
+      <h2>Top Categorías Egreso · ${t1}</h2>
+      ${renderTopCat(d1.top_egresos_cat)}
+      <h2 style="margin-top:14px">Egresos por Cultivo</h2>
+      ${renderCultivos(d1.egresos_por_cultivo)}
+    </div>
+  `;
+
+  // Flujo
+  renderFlujo(flujo);
+}
+
+function renderFacturasTable(items, diasKey, tipo) {
+  if (!items.length) return '<p style="color:#aaa;text-align:center;padding:20px">Sin facturas</p>';
+  let html = '<table><tr><th>Vence</th><th>Proveedor</th><th>Detalle</th><th class="num">Monto</th><th class="num">Días</th></tr>';
+  for (const f of items) {
+    const dias = f[diasKey];
+    const cls = tipo === 'venc' ? 'dias-venc' : 'dias-prox';
+    const sign = tipo === 'venc' ? '-' : '+';
+    html += `<tr>
+      <td>${f.fecha_vencimiento}</td>
+      <td>${f.proveedor.substring(0, 25)}</td>
+      <td style="color:#666">${(f.detalle || '').substring(0, 30)}</td>
+      <td class="num">${fmt(f.monto)}</td>
+      <td class="num ${cls}">${sign}${dias}d</td>
+    </tr>`;
+  }
+  return html + '</table>';
+}
+
+function renderTopCat(items) {
+  if (!items || !items.length) return '<p style="color:#aaa">Sin datos</p>';
+  const max = Math.max(...items.map(x => x.monto));
+  let html = '<table>';
+  for (const it of items.slice(0, 10)) {
+    const w = max > 0 ? Math.round((it.monto / max) * 80) : 0;
+    html += `<tr><td>${it.categoria.substring(0, 28)}</td>
+      <td class="num"><span style="display:inline-block;height:6px;width:${w}px;background:#e74c3c;border-radius:2px;margin-right:4px"></span>${fmt(it.monto)}</td></tr>`;
+  }
+  return html + '</table>';
+}
+
+function renderCultivos(items) {
+  if (!items.length) return '<p style="color:#aaa">Sin datos</p>';
+  const max = Math.max(...items.map(x => x.monto));
+  let html = '<table>';
+  for (const it of items) {
+    const w = max > 0 ? Math.round((it.monto / max) * 80) : 0;
+    html += `<tr><td><span class="cult-bar ${it.cultivo}" style="width:8px;"></span>${it.cultivo}</td>
+      <td class="num"><span class="cult-bar ${it.cultivo}" style="width:${w}px"></span>${fmt(it.monto)}</td></tr>`;
+  }
+  return html + '</table>';
+}
+
+function renderFlujo(flujo) {
+  const wrap = document.getElementById('flujo-wrap');
+  const M = flujo.labels.length;
+
+  // Cada mes tiene 2 sub-columnas: P (proyectado) y R (real)
+  let html = '<table class="flujo"><thead><tr><th rowspan="2">Categoría</th>';
+  for (let i = 0; i < M; i++) {
+    html += `<th colspan="2" class="mes${i === 0 ? ' actual' : ''}" style="text-align:center;border-left:1px solid #ccc">${flujo.labels[i]}</th>`;
+  }
+  html += '<th colspan="2" class="mes" style="text-align:center;border-left:1px solid #ccc">Total</th></tr><tr>';
+  for (let i = 0; i < M; i++) {
+    html += `<th class="mes" style="font-size:9px;border-left:1px solid #ccc">Proy</th><th class="mes" style="font-size:9px;color:#27ae60">Real</th>`;
+  }
+  html += '<th class="mes" style="font-size:9px;border-left:1px solid #ccc">Proy</th><th class="mes" style="font-size:9px;color:#27ae60">Real</th></tr></thead><tbody>';
+
+  // Ingresos
+  html += '<tr class="ingresos-row"><td>INGRESOS</td>';
+  for (let i = 0; i < M; i++) {
+    const p = flujo.ingresos_por_mes_proy[i];
+    const r = flujo.ingresos_por_mes_real[i];
+    html += `<td class="mes-val${i === 0 ? ' actual' : ''}" style="border-left:1px solid #ccc">${fmt(p)}</td><td class="mes-val" style="color:#1e8449">${fmt(r)}</td>`;
+  }
+  html += `<td class="mes-val" style="border-left:1px solid #ccc">${fmt(flujo.total_ingresos_proy)}</td><td class="mes-val" style="color:#1e8449">${fmt(flujo.total_ingresos_real)}</td></tr>`;
+
+  // Egresos por categoría (expandible)
+  for (let idx = 0; idx < flujo.filas_egresos.length; idx++) {
+    const f = flujo.filas_egresos[idx];
+    html += `<tr class="cat-row" onclick="toggleDet(${idx})"><td><span class="expand-icon">▸</span> ${f.categoria}</td>`;
+    for (let i = 0; i < M; i++) {
+      const p = f.meses_proy[i];
+      const r = f.meses_real[i];
+      html += `<td class="mes-val${i === 0 ? ' actual' : ''}" style="border-left:1px solid #ccc">${fmt(p)}</td><td class="mes-val" style="color:#27ae60">${fmt(r)}</td>`;
+    }
+    html += `<td class="mes-val" style="border-left:1px solid #ccc">${fmt(f.total_proy)}</td><td class="mes-val" style="color:#27ae60">${fmt(f.total_real)}</td></tr>`;
+    html += `<tr class="detalle-row" id="det-${idx}"><td colspan="${M * 2 + 3}" style="padding:8px 30px;color:#666">
+      Proyectado total: ${fmtFull(f.total_proy)} · Real ejecutado: ${fmtFull(f.total_real)} · Diferencia: ${fmtFull(f.total_real - f.total_proy)}
+    </td></tr>`;
+  }
+
+  // Total egresos
+  const total_proy = flujo.meses.map((_, i) => flujo.filas_egresos.reduce((s, f) => s + (f.meses_proy[i] || 0), 0));
+  const total_real = flujo.meses.map((_, i) => flujo.filas_egresos.reduce((s, f) => s + (f.meses_real[i] || 0), 0));
+  html += '<tr class="total-row"><td>TOTAL EGRESOS</td>';
+  for (let i = 0; i < M; i++) {
+    html += `<td class="mes-val" style="border-left:1px solid #ccc">${fmt(total_proy[i])}</td><td class="mes-val">${fmt(total_real[i])}</td>`;
+  }
+  html += `<td class="mes-val" style="border-left:1px solid #ccc">${fmt(flujo.total_egresos_proy)}</td><td class="mes-val">${fmt(flujo.total_egresos_real)}</td></tr>`;
+
+  // Saldo mensual
+  html += '<tr class="total-row" style="background:#5d6d7e"><td>SALDO MES (Ing-Egr)</td>';
+  for (let i = 0; i < M; i++) {
+    const sp = flujo.ingresos_por_mes_proy[i] - total_proy[i];
+    const sr = flujo.ingresos_por_mes_real[i] - total_real[i];
+    html += `<td class="mes-val" style="color:${sp>=0?'#a8e6cf':'#ff7675'};border-left:1px solid #888">${fmt(sp)}</td><td class="mes-val" style="color:${sr>=0?'#a8e6cf':'#ff7675'}">${fmt(sr)}</td>`;
+  }
+  const tsp = flujo.total_ingresos_proy - flujo.total_egresos_proy;
+  const tsr = flujo.total_ingresos_real - flujo.total_egresos_real;
+  html += `<td class="mes-val" style="color:${tsp>=0?'#a8e6cf':'#ff7675'};border-left:1px solid #888">${fmt(tsp)}</td><td class="mes-val" style="color:${tsr>=0?'#a8e6cf':'#ff7675'}">${fmt(tsr)}</td></tr>`;
+
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function toggleDet(idx) {
+  const det = document.getElementById('det-' + idx);
+  const rows = document.querySelectorAll('tr.cat-row');
+  const row = rows[idx];
+  det.classList.toggle('show');
+  row.classList.toggle('expanded');
+  const icon = row.querySelector('.expand-icon');
+  icon.textContent = det.classList.contains('show') ? '▾' : '▸';
+}
+
+document.getElementById('hoy').textContent = new Date().toLocaleDateString('es-CL', {year:'numeric', month:'long', day:'numeric'});
+if (TEMPS.length >= 2) document.getElementById('t2').value = TEMPS[1];
+document.getElementById('t1').addEventListener('change', loadAll);
+document.getElementById('t2').addEventListener('change', loadAll);
+loadAll();
+</script>
+</body>
+</html>

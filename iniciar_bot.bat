@@ -7,17 +7,45 @@ echo   Bot Agricola Santa Elisa - Inicio
 echo ============================================
 echo.
 
-REM Verificar Python
-py -3.11 --version >nul 2>&1
-if errorlevel 1 (
-    echo [ERROR] Python 3.11 no encontrado. Ejecuta: py install 3.11
+REM Detectar Python 3.11 (intenta varios paths)
+set PYTHON=
+where py >nul 2>&1
+if %errorlevel% equ 0 (
+    py -3.11 --version >nul 2>&1
+    if %errorlevel% equ 0 set PYTHON=py -3.11
+)
+
+if "%PYTHON%"=="" (
+    if exist "%LOCALAPPDATA%\Python\bin\python3.11.exe" (
+        set "PYTHON=%LOCALAPPDATA%\Python\bin\python3.11.exe"
+    )
+)
+
+if "%PYTHON%"=="" (
+    if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" (
+        set "PYTHON=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
+    )
+)
+
+if "%PYTHON%"=="" (
+    where python >nul 2>&1
+    if %errorlevel% equ 0 set PYTHON=python
+)
+
+if "%PYTHON%"=="" (
+    echo [ERROR] Python 3.11 no encontrado.
+    echo Instala Python 3.11 o ajusta la ruta en iniciar_bot.bat
     pause
     exit /b 1
 )
 
+echo Python detectado: %PYTHON%
+%PYTHON% --version
+echo.
+
 REM Verificar dependencias
 echo Verificando dependencias...
-py -3.11 -m pip install -q python-telegram-bot python-dotenv openpyxl anthropic python-dateutil >nul 2>&1
+%PYTHON% -m pip install -q python-telegram-bot python-dotenv openpyxl anthropic python-dateutil >nul 2>&1
 
 REM Verificar .env
 if not exist ".env" (
@@ -28,7 +56,8 @@ if not exist ".env" (
 )
 
 echo.
-echo Iniciando bot... (Ctrl+C para detener)
+echo Iniciando bot con WATCHDOG (reinicio automatico)... (Ctrl+C para detener)
+echo Nota: si ya hay un watchdog corriendo (tarea AgricolaBotWatchdog), este saldra solo.
 echo.
-py -3.11 main.py
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0watchdog_bot.ps1"
 pause

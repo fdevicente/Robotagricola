@@ -9,7 +9,7 @@ import os
 import re
 from datetime import datetime
 
-from config import DOWNLOAD_DIR, BOLETAS_DIR, EXCEL_PATH
+from config import DOWNLOAD_DIR, BOLETAS_DIR, EXCEL_PATH, AUTO_SAVE_USERS
 
 logger = logging.getLogger(__name__)
 
@@ -294,12 +294,122 @@ from inventario_manager import agregar_stock_desde_factura
 from utils.keyboards import main_keyboard, proveedor_nuevo_keyboard
 
 
+def _hay_factura_en_proceso(context, ud=None) -> bool:
+    """True si hay una factura esperando confirmación."""
+    ud = context.user_data if ud is None else ud
+    return bool(ud.get("pending_items"))
+
+
+def _destino_factura(update, context):
+    """Decide quién revisa la factura.
+
+    Si la manda un usuario en AUTO_SAVE_USERS (Juan) y hay dueño registrado,
+    la revisión se delega al dueño: el preview y los botones van a SU chat y
+    los datos quedan en SU user_data (para que su callback los encuentre).
+
+    Devuelve (chat_destino, user_data_destino, delegada, nombre_remitente).
+    """
+    uid = update.effective_user.id if update.effective_user else None
+    nombre = update.effective_user.full_name if update.effective_user else "?"
+    owner_chat = context.bot_data.get("owner_chat_id")
+    owner_uid = context.bot_data.get("owner_user_id") or owner_chat
+
+    if uid in AUTO_SAVE_USERS and owner_chat and uid != owner_uid:
+        try:
+            ud_owner = context.application.user_data[owner_uid]
+            return owner_chat, ud_owner, True, nombre
+        except Exception as e:
+            logger.warning(f"No pude delegar factura al dueño: {e}")
+    return update.effective_chat.id, context.user_data, False, nombre
+
+
+async def _encolar_factura(context, chat_id, path, ud=None, remitente=""):
+    """Agrega una factura ya descargada a la cola y avisa la posición."""
+    ud = context.user_data if ud is None else ud
+    cola = ud.setdefault("cola_facturas", [])
+    cola.append(path)
+    de = f" de {remitente}" if remitente else ""
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=f"📥 Recibí otra factura{de}. Está en cola (#{len(cola)} en espera). "
+             f"La procesaré apenas termines con la actual.")
+
+
+async def _procesar_siguiente_de_cola(context, chat_id):
+    """Si hay facturas en cola, toma la siguiente y la procesa.
+
+    Se llama al confirmar o cancelar la factura actual.
+    """
+    cola = context.user_data.get("cola_facturas", [])
+    if not cola:
+        return
+    path = cola.pop(0)
+    restantes = len(cola)
+    status = await context.bot.send_message(
+        chat_id=chat_id,
+        text=(f"🔍 Procesando siguiente factura de la cola"
+              f"{f' ({restantes} más en espera)' if restantes else ''}… "
+              f"(puede tardar hasta 1 minuto)"))
+    try:
+        await _process_and_reply(None, context, status, path)
+    except Exception as e:
+        logger.error(f"Error procesando factura en cola: {e}")
+        try:
+            await status.edit_text("❌ Error al procesar la factura en cola. "
+                                    "Reenvíala manualmente.")
+        except Exception:
+            pass
+
+    # Si la factura NO quedó en preview (falló extracción IA, sin items),
+    # no habrá confirmación que dispare la siguiente: avanzar la cola ahora.
+    if not context.user_data.get("pending_items"):
+        await _procesar_siguiente_de_cola(context, chat_id)
+
+
 async def handle_document(update, context):
     doc = update.message.document
+
+    # Cartola del banco (CSV/TXT/Excel) → importador de movimientos
+    from handlers.banco_upload import (es_archivo_cartola,
+                                        parece_cartola_por_nombre,
+                                        procesar_cartola)
+
+    # Una cartola en PDF se leería como factura y crearía un registro falso:
+    # se ataja antes de llegar al extractor.
+    if (doc.mime_type == "application/pdf"
+            and parece_cartola_por_nombre(doc.file_name)):
+        await update.message.reply_text(
+            "🏦 Esto parece una *cartola del banco en PDF*, y de ahí no puedo "
+            "leer los movimientos de forma confiable.\n\n"
+            "En el portal, al descargar la cartola elige **Excel, CSV o TXT** "
+            "y mándamela así: te muestro el preview y la importo sin duplicar.\n\n"
+            "_Si en realidad es una factura, cámbiale el nombre y reenvíala._",
+            parse_mode="Markdown")
+        return
+
+    if es_archivo_cartola(doc.file_name):
+        status = await update.message.reply_text("🏦 Recibí la cartola. Revisándola…")
+        try:
+            f = await context.bot.get_file(doc.file_id)
+            path = _save_path(doc.file_name)
+            if not await _download_with_retry(f, path):
+                await status.edit_text("❌ No pude descargar el archivo.")
+                return
+            await procesar_cartola(update, context, path, status)
+        except Exception as e:
+            logger.error(f"Error en cartola: {e}")
+            await status.edit_text(f"❌ Error al procesar la cartola: {str(e)[:150]}")
+        return
+
     if doc.mime_type != "application/pdf":
         await update.message.reply_text(
-            "❌ Solo acepto PDFs. Para imágenes, envíalas como foto.")
+            "❌ Solo acepto PDFs (facturas) o cartolas del banco (CSV/TXT/Excel).\n"
+            "Para imágenes, envíalas como foto.")
         return
+    chat_destino, ud, delegada, remitente = _destino_factura(update, context)
+    ud["auto_mode"] = bool(
+        not delegada and update.effective_user
+        and update.effective_user.id in AUTO_SAVE_USERS)
     status = await update.message.reply_text("📥 Recibí tu PDF. Descargándolo...")
     try:
         f = await context.bot.get_file(doc.file_id)
@@ -307,8 +417,24 @@ async def handle_document(update, context):
         if not await _download_with_retry(f, path):
             await status.edit_text("❌ No pude descargar el PDF. Intenta enviarlo de nuevo.")
             return
-        await status.edit_text("🔍 Leyendo documento con IA… (puede tardar hasta 1 minuto)")
-        await _process_and_reply(update, context, status, path)
+        # Si hay una factura en proceso, encolar (ya descargada)
+        if _hay_factura_en_proceso(context, ud):
+            if delegada:
+                await status.edit_text("📥 Factura recibida")
+            else:
+                await status.delete()
+            await _encolar_factura(context, chat_destino, path, ud,
+                                    remitente if delegada else "")
+            return
+        if delegada:
+            await status.edit_text("📥 Factura recibida")
+            status = await context.bot.send_message(
+                chat_destino, f"🔍 Leyendo factura enviada por {remitente}… "
+                              f"(puede tardar hasta 1 minuto)")
+        else:
+            await status.edit_text("🔍 Leyendo documento con IA… (puede tardar hasta 1 minuto)")
+        await _process_and_reply(update, context, status, path, ud,
+                                  prefijo=f"📨 *Factura enviada por {remitente}*\n\n" if delegada else "")
     except Exception as e:
         logger.error(f"Error en handle_document: {e}")
         try:
@@ -319,6 +445,20 @@ async def handle_document(update, context):
 
 async def handle_photo(update, context):
     photo = update.message.photo[-1]
+
+    # Una foto de horómetro NO es una factura: si se cuela al extractor, crea
+    # un registro basura y gasta una llamada a la IA.
+    from handlers.maquinaria import (modo_activo, parece_maquinaria,
+                                      procesar_foto_horometro)
+    if modo_activo(context) or parece_maquinaria(update.message.caption or ""):
+        if await procesar_foto_horometro(update, context):
+            return
+
+    chat_destino, ud, delegada, remitente = _destino_factura(update, context)
+    # Auto-guardado solo si NO hay dueño a quien delegar la revisión
+    ud["auto_mode"] = bool(
+        not delegada and update.effective_user
+        and update.effective_user.id in AUTO_SAVE_USERS)
     status = await update.message.reply_text("📥 Recibí tu imagen. Descargándola...")
     try:
         f = await context.bot.get_file(photo.file_id)
@@ -327,8 +467,23 @@ async def handle_photo(update, context):
         if not await _download_with_retry(f, path):
             await status.edit_text("❌ No pude descargar la imagen. Intenta enviarla de nuevo.")
             return
-        await status.edit_text("🔍 Leyendo documento con IA… (puede tardar hasta 1 minuto)")
-        await _process_and_reply(update, context, status, path)
+        if _hay_factura_en_proceso(context, ud):
+            if delegada:
+                await status.edit_text("📥 Factura recibida")
+            else:
+                await status.delete()
+            await _encolar_factura(context, chat_destino, path, ud,
+                                    remitente if delegada else "")
+            return
+        if delegada:
+            await status.edit_text("📥 Factura recibida")
+            status = await context.bot.send_message(
+                chat_destino, f"🔍 Leyendo factura enviada por {remitente}… "
+                              f"(puede tardar hasta 1 minuto)")
+        else:
+            await status.edit_text("🔍 Leyendo documento con IA… (puede tardar hasta 1 minuto)")
+        await _process_and_reply(update, context, status, path, ud,
+                                  prefijo=f"📨 *Factura enviada por {remitente}*\n\n" if delegada else "")
     except Exception as e:
         logger.error(f"Error en handle_photo: {e}")
         try:
@@ -337,7 +492,22 @@ async def handle_photo(update, context):
             pass
 
 
-async def _process_and_reply(update, context, status_msg, file_path):
+class _MsgAsQuery:
+    """Adapta un Message para reusar _guardar_excel (que espera un callback query)."""
+    def __init__(self, msg):
+        self.message = msg
+
+    async def edit_message_text(self, *args, **kwargs):
+        return await self.message.edit_text(*args, **kwargs)
+
+
+async def _process_and_reply(update, context, status_msg, file_path, ud=None, prefijo=""):
+    """Extrae la factura y deja el preview listo para confirmar.
+
+    `ud` permite dejar los datos en el user_data de OTRO usuario (el dueño),
+    cuando la factura la mandó Juan y la revisión se delega.
+    """
+    ud = context.user_data if ud is None else ud
     result = await asyncio.to_thread(process_file, file_path)
     if result.get("status") == "error":
         await status_msg.edit_text(f"❌ {result.get('message')}", parse_mode="Markdown")
@@ -348,11 +518,24 @@ async def _process_and_reply(update, context, status_msg, file_path):
         return
 
     file_path = _renombrar_archivo(file_path, items)
-    context.user_data["pending_items"] = items
-    context.user_data["pending_file_path"] = file_path
-    context.user_data["editing_field"] = None
+    ud["pending_items"] = items
+    ud["pending_file_path"] = file_path
+    ud["editing_field"] = None
 
-    preview = _build_preview(items)
+    # ── MODO CAPATAZ: guardar directo sin preview/confirmación (la cola no se atora) ──
+    if ud.get("auto_mode"):
+        first = items[0]
+        nombre = first.get("Nombre Factura / Proveedor")
+        rut = first.get("Rut")
+        try:
+            if nombre and rut and not await asyncio.to_thread(_rut_existe, rut):
+                await asyncio.to_thread(_agregar_proveedor, nombre, rut)
+        except Exception as e:
+            logger.warning(f"Auto-factura: no pude verificar/agregar proveedor: {e}")
+        await _guardar_excel(_MsgAsQuery(status_msg), context, items, file_path)
+        return
+
+    preview = prefijo + _build_preview(items)
     if result.get("duplicado"):
         preview = ("⚠️ *ADVERTENCIA: Esta factura parece ya estar registrada.*\n"
                     "Revisa bien antes de guardar.\n\n" + preview)
@@ -409,14 +592,68 @@ async def _guardar_excel(query, context, items, file_path):
                 f"{saldo_txt}{alerta}\n\n_Usa /deshacer si hay algún error_",
                 parse_mode="Markdown")
         else:
+            # El tipo de documento real (boleta de honorarios, NC, ND…) va en el mensaje
+            doc = str(first.get("Documento") or "").strip()
+            doc_l = doc.lower()
+            if "boleta de honorario" in doc_l:
+                titulo, icono = "Boleta de honorarios guardada", "🧾"
+            elif "nota de credito" in doc_l or "nota de crédito" in doc_l:
+                titulo, icono = "Nota de crédito guardada", "↩️"
+            elif "nota de debito" in doc_l or "nota de débito" in doc_l:
+                titulo, icono = "Nota de débito guardada", "↪️"
+            elif doc and "factura" not in doc_l:
+                titulo, icono = f"{doc.capitalize()} guardado", "📄"
+            else:
+                titulo, icono = "Factura guardada", "📄"
+
+            # N° de archivo físico, para buscar el papel impreso
+            n_arch = ""
+            try:
+                from modules.correlativo import COL_CORRELATIVO
+                import openpyxl
+                _wb = openpyxl.load_workbook(EXCEL_PATH, read_only=True, data_only=True)
+                _ws = _wb["Facturas"]
+                _v = _ws.cell(_ws.max_row, COL_CORRELATIVO).value
+                _wb.close()
+                if _v:
+                    n_arch = f"🗂️ N° de archivo: *{_v}*\n"
+            except Exception as e:
+                logger.warning(f"No pude leer el N° de archivo: {e}")
+
             await query.edit_message_text(
-                f"✅ *Factura guardada*\n\n"
-                f"🏢 {_esc(proveedor)}\n📄 Nº {_esc(nro)}  —  💰 ${total:,.0f}\n"
+                f"✅ *{titulo}*\n\n"
+                f"🏢 {_esc(proveedor)}\n{icono} Nº {_esc(nro)}  —  💰 ${total:,.0f}\n"
+                f"{n_arch}"
                 f"📊 {len(items)} fila(s) en el Excel\n\n_Usa /deshacer si hay algún error_",
                 parse_mode="Markdown")
+            # Si es proveedor de insumos, encolar productos para fecha de vencimiento
+            try:
+                from vencimientos_manager import es_proveedor_insumo, agregar_pendiente
+                if es_proveedor_insumo(str(proveedor)):
+                    fecha_compra = first.get("Fecha Emision")
+                    for it in items:
+                        prod = str(it.get("Detalle / Glosa") or "").strip()
+                        if prod:
+                            await asyncio.to_thread(
+                                agregar_pendiente, prod, str(proveedor),
+                                str(nro), fecha_compra)
+            except Exception as e:
+                logger.warning(f"No pude registrar pendientes de vencimiento: {e}")
     else:
         await query.edit_message_text(
             "❌ Error al guardar. ¿Está el Excel abierto en otro programa?")
+
+    # Tras guardar (o fallar), procesar la siguiente factura de la cola
+    try:
+        chat_id = query.message.chat_id
+        if context.user_data.get("cola_facturas"):
+            await _procesar_siguiente_de_cola(context, chat_id)
+        else:
+            # Lote terminado: recordar pendientes de fecha de vencimiento
+            from handlers.vencimientos import recordatorio_pendientes
+            await recordatorio_pendientes(context, chat_id)
+    except Exception as e:
+        logger.warning(f"No pude procesar siguiente de cola: {e}")
 
 
 # ── Callbacks de edición ─────────────────────────
@@ -474,6 +711,8 @@ async def cb_cancel_save(update, context):
     await query.answer()
     context.user_data["pending_items"] = []
     await query.edit_message_text("🚫 Factura descartada. Mándame otra cuando quieras.")
+    # Procesar siguiente de la cola si hay
+    await _procesar_siguiente_de_cola(context, update.effective_chat.id)
 
 
 async def cb_edit_menu(update, context):

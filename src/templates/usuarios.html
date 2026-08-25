@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Usuarios — Agrícola Santa Elisa</title>
+<style>
+body { font-family: -apple-system, "Segoe UI", Arial, sans-serif; margin: 0; background: #f4f6f8; color: #2f3b45; }
+.top { background: #fff; border-bottom: 1px solid #e3e8ec; padding: 12px 24px; display: flex; align-items: center; gap: 18px; }
+.top .logo { background: #16a394; color: #fff; font-weight: 700; border-radius: 6px; padding: 6px 10px; }
+.top a { color: #5b6b77; text-decoration: none; font-size: 14px; margin-right: 14px; }
+.top .der { margin-left: auto; font-size: 13px; color: #6b7b87; }
+.wrap { max-width: 1000px; margin: 22px auto; padding: 0 24px; }
+.card { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(20,40,60,.08); margin-bottom: 18px; }
+.card h2 { font-size: 15px; margin: 0; padding: 14px 18px; border-bottom: 1px solid #eef1f4; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 12px; color: #7a8894; padding: 9px 18px; border-bottom: 2px solid #eef1f4; }
+td { padding: 10px 18px; border-bottom: 1px solid #f0f3f5; font-size: 13px; }
+.rol { font-size: 11px; border-radius: 9px; padding: 2px 10px; background: #eef4f3; color: #12786c; }
+.rol.gerencia { background: #eef2fb; color: #3454a3; }
+.rol.campo { background: #fdf3e6; color: #a1651a; }
+.form { padding: 16px 18px; display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 10px; align-items: end; }
+label { display: block; font-size: 12px; color: #5b6b77; margin-bottom: 3px; }
+input, select { width: 100%; padding: 8px 10px; border: 1px solid #d5dde3; border-radius: 5px; font-size: 13px; }
+button { background: #16a394; color: #fff; border: none; border-radius: 5px; padding: 9px 18px; font-size: 13px; cursor: pointer; }
+.msg { padding: 10px 18px; font-size: 13px; }
+.msg.err { color: #b3372a; } .msg.ok { color: #1f7a4d; }
+.nota { font-size: 12px; color: #8798a4; padding: 0 18px 14px; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="logo">ASE</div>
+  <a href="/">Inicio</a><a href="/conciliacion">Conciliación</a><a href="/usuarios">Usuarios</a>
+  <div class="der">{{ user.nombre }} · {{ user.rol_label }} · <a href="/logout">Salir</a></div>
+</div>
+<div class="wrap">
+  <div class="card">
+    <h2>Usuarios del sistema</h2>
+    <table>
+      <thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Estado</th><th>Último acceso</th></tr></thead>
+      <tbody>
+      {% for u in usuarios %}
+        <tr>
+          <td><b>{{ u.usuario }}</b></td>
+          <td>{{ u.nombre }}</td>
+          <td><span class="rol {{ u.rol }}">{{ roles.get(u.rol, u.rol) }}</span></td>
+          <td>{{ 'Activo' if u.activo else 'Inactivo' }}</td>
+          <td>{{ u.ultimo_acceso or '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Crear usuario</h2>
+    <div class="form">
+      <div><label>Usuario</label><input id="nu" autocomplete="off"></div>
+      <div><label>Nombre</label><input id="nn" autocomplete="off"></div>
+      <div><label>Contraseña (mín. 8)</label><input id="np" type="password" autocomplete="new-password"></div>
+      <div><label>Rol</label><select id="nr">
+        {% for k, v in roles.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+      </select></div>
+      <div><button onclick="crear()">Crear</button></div>
+    </div>
+    <div class="msg" id="msg"></div>
+    <div class="nota">
+      <b>Administrador:</b> acceso total, incluida la gestión de usuarios.<br>
+      <b>Gerencia:</b> parte financiera (facturas, banco, conciliación, flujo, reportes) y personal.<br>
+      <b>Administrador de campo:</b> ingreso de datos (bitácora, inventario, tareas). No ve banco ni finanzas.
+    </div>
+  </div>
+</div>
+<script>
+async function crear() {
+  const b = {usuario: nu.value.trim(), nombre: nn.value.trim(),
+             password: np.value, rol: nr.value};
+  const m = document.getElementById('msg');
+  if (!b.usuario || !b.password) { m.className = 'msg err'; m.textContent = 'Usuario y contraseña son obligatorios.'; return; }
+  const r = await fetch('/api/usuarios', {method: 'POST',
+    headers: {'Content-Type': 'application/json'}, body: JSON.stringify(b)});
+  const j = await r.json();
+  if (r.ok) { m.className = 'msg ok'; m.textContent = `Usuario "${j.usuario}" creado.`; setTimeout(() => location.reload(), 900); }
+  else { m.className = 'msg err'; m.textContent = j.error || 'Error'; }
+}
+</script>
+</body>
+</html>

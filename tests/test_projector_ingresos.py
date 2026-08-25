@@ -1,6 +1,7 @@
 import os, shutil, pytest
 from openpyxl import load_workbook
 from excel_manager import ensure_cash_flow_sheets, COSECHAS_SHEET
+from config import CASH_FLOW_CONFIG
 
 
 @pytest.fixture
@@ -42,7 +43,9 @@ def test_load_ingresos_estimates_usd_when_pending(m):
     wb.save(m); wb.close()
 
     ingresos = load_expected_ingresos(excel_path=m)
-    assert ingresos[0]["monto_clp"] == 126_000_000
+    # sin columna "Aplica IVA" (fila de 16 columnas) -> queda en el neto.
+    # Se compara contra el tipo de cambio configurado, no contra un literal.
+    assert ingresos[0]["monto_clp"] == 126_000 * CASH_FLOW_CONFIG["usd_clp_estimado"]
 
 
 def test_load_ingresos_empty_returns_empty(m):

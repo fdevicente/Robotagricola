@@ -17,3 +17,22 @@ Boletas Recibidas por Telegram/
 Guias Recibidas por Telegram/
 files/
 '$'/
+
+# Estado y persistencia del bot
+.bot_state.json
+.bot_persistence.pickle
+
+# Base de datos local (Fase A migracion)
+agricola.db
+*.db-journal
+.flask_secret
+.dashboard_token
+
+# Respaldos de la persistencia (traen chat_ids y config del bot)
+.bot_persistence.pickle*
+
+# Capturas de error del portal del banco: pueden mostrar saldos y movimientos
+Claude/
+
+# Dependencias vendorizadas de un script viejo
+node_modules/

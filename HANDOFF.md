@@ -1,7 +1,33 @@
+> # 🔒 DOCUMENTO HISTÓRICO — CONGELADO EL 2026-08-17. NO ACTUALIZAR.
+>
+> Esto es una **foto del 22-mayo-2026**, no el estado del proyecto. Se conserva
+> como registro de cómo se construyó el bot. **No lo edites, no lo uses para
+> decidir nada y no lo tomes como contexto vigente.**
+>
+> **El estado real vive en la memoria:**
+> `~/.claude/projects/C--Users-Windows-Desktop-Workflow/memory/project_pendientes_roadmap.md`
+> (lista de arranque — leer primero) y el resto de `memory/`.
+>
+> **Cosas de este archivo que hoy son FALSAS:**
+> - El **scraper del banco MURIÓ** (Akamai Bot Manager, 5-ago-2026). Los pasos que
+>   dicen "correr `daily_banco_18h.py`" o esperar que el scraper traiga 2026 ya no
+>   aplican: la vía es la **carga manual de cartola por Telegram**. No intentar
+>   resolver ni eludir el CAPTCHA.
+> - Los conteos de facturas/banco/tests son de mayo. Hoy el banco está **100%
+>   categorizado** y la suite va en **285/285**.
+> - "Master.Cuenta Banco solo hasta ene-2025" y "4220 cargos sin clasificar":
+>   resueltos hace meses.
+> - Las cifras de proyección (ingresos $383,6M / egresos $488,4M / saldo +$25,8M)
+>   están **completamente superadas**: el colchón 26/27 hoy es **−$267M**.
+> - El conciliador que aquí no existe hoy está **completo (5/5 fases)**.
+
+---
+
 # Handoff — Bot Agrícola Santa Elisa
 
 **Fecha:** 2026-05-22 (actualizado post-categorización)
 **Estado:** ✅ Bot funcional + refactor + cash flow + categorización banco 99.2%
+**Vigencia:** ⛔ HISTÓRICO — ver el aviso de arriba
 
 ---
 

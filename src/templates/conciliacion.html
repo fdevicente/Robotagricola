@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Conciliación Bancaria — Agrícola Santa Elisa</title>
+<style>
+* { box-sizing: border-box; }
+body { font-family: -apple-system, "Segoe UI", Arial, sans-serif; margin: 0; background: #f4f6f8; color: #2f3b45; }
+a { color: #16a394; text-decoration: none; }
+.top { background: #fff; border-bottom: 1px solid #e3e8ec; padding: 10px 24px; display: flex; align-items: center; gap: 22px; }
+.top .logo { background: #16a394; color: #fff; font-weight: 700; border-radius: 6px; padding: 6px 10px; }
+.top nav a { margin-right: 16px; color: #5b6b77; font-size: 14px; }
+.top nav a.act { color: #16a394; border-bottom: 3px solid #16a394; padding-bottom: 12px; }
+.wrap { max-width: 1500px; margin: 0 auto; padding: 18px 24px; }
+/* KPIs */
+.kpis { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 18px; }
+.kpi { background: #fff; border-radius: 8px; padding: 16px 22px; box-shadow: 0 1px 3px rgba(20,40,60,.08); }
+.kpi .v { font-size: 26px; font-weight: 700; }
+.kpi .l { color: #7a8894; font-size: 13px; margin-top: 2px; }
+/* Filtros */
+.filtros { background: #fff; border-radius: 8px; padding: 14px 18px; box-shadow: 0 1px 3px rgba(20,40,60,.08); margin-bottom: 16px; }
+.filtros .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+.filtros label { font-size: 12px; color: #5b6b77; display: block; margin-bottom: 3px; }
+.filtros input, .filtros select { width: 100%; padding: 7px 9px; border: 1px solid #d5dde3; border-radius: 5px; font-size: 13px; }
+.btn { border: none; border-radius: 5px; padding: 8px 16px; font-size: 13px; cursor: pointer; color: #fff; background: #16a394; }
+.btn:hover { filter: brightness(.95); }
+.btn.sec { background: #fff; color: #5b6b77; border: 1px solid #d5dde3; }
+.btn:disabled { background: #c3ccd3; cursor: not-allowed; }
+/* Tabs */
+.tabs { display: flex; align-items: center; gap: 4px; background: #fff; border-radius: 8px 8px 0 0; padding: 6px 12px 0; box-shadow: 0 1px 3px rgba(20,40,60,.08); }
+.tab { padding: 10px 16px; font-size: 14px; color: #5b6b77; cursor: pointer; border-bottom: 3px solid transparent; }
+.tab.act { color: #16a394; border-color: #16a394; font-weight: 600; }
+.tab .n { background: #e5533d; color: #fff; border-radius: 9px; font-size: 11px; padding: 1px 7px; margin-left: 4px; }
+.tab .n.gris { background: #8fa0ac; }
+.tabs .chk { margin-left: auto; font-size: 13px; color: #5b6b77; }
+/* Tabla */
+.card { background: #fff; border-radius: 0 0 8px 8px; box-shadow: 0 1px 3px rgba(20,40,60,.08); }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 12px; color: #7a8894; padding: 10px 12px; border-bottom: 2px solid #eef1f4; }
+td { padding: 9px 12px; border-bottom: 1px solid #f0f3f5; font-size: 13px; vertical-align: middle; }
+tr:hover td { background: #fafcfd; }
+.badge { display: inline-block; background: #59c1d8; color: #fff; border-radius: 4px; font-size: 10px; padding: 2px 7px; margin-right: 6px; }
+.badge.rc { background: #a58ad0; } .badge.pg { background: #8fa0ac; }
+.cat { font-size: 11px; color: #7a8894; }
+.monto { text-align: right; font-weight: 600; white-space: nowrap; }
+.cargo { color: #c0392b; } .abono { color: #1f9d55; }
+.est { font-size: 11px; color: #9aa7b1; white-space: nowrap; }
+.est .ok { color: #1f9d55; font-weight: 600; font-size: 12px; }
+.est .par { color: #d98f00; font-weight: 600; }
+.acc { display: flex; align-items: center; gap: 4px; margin-top: 3px; }
+.bcon { background: #16a394; color: #fff; border: none; border-radius: 4px 0 0 4px; padding: 5px 11px; font-size: 12px; cursor: pointer; }
+.bcar { background: #16a394; color: #fff; border: none; border-left: 1px solid rgba(255,255,255,.4); border-radius: 0 4px 4px 0; padding: 5px 7px; font-size: 11px; cursor: pointer; }
+.blink { background: none; border: none; color: #59809d; font-size: 11px; cursor: pointer; text-decoration: underline; }
+/* Notas por movimiento */
+.chat { background: none; border: none; cursor: pointer; font-size: 14px; opacity: .3; padding: 2px 4px; border-radius: 4px; }
+.chat:hover { opacity: 1; background: #eef4f3; }
+.chat.con { opacity: 1; font-size: 12px; color: #16a394; font-weight: 600; }
+.nota { border-left: 3px solid #16a394; background: #f7fbfa; padding: 8px 12px; margin-bottom: 8px; border-radius: 0 6px 6px 0; font-size: 13px; }
+.nota .meta { font-size: 11px; color: #8fa0ac; margin-top: 3px; }
+/* Menú contextual */
+.menu { position: absolute; background: #fff; border: 1px solid #dfe5ea; border-radius: 7px; box-shadow: 0 6px 18px rgba(20,40,60,.18); z-index: 60; min-width: 210px; }
+.menu div { padding: 10px 14px; font-size: 13px; cursor: pointer; }
+.menu div:hover { background: #f2f7f6; }
+/* Modal */
+.overlay { position: fixed; inset: 0; background: rgba(30,45,60,.45); z-index: 80; display: flex; align-items: flex-start; justify-content: center; padding-top: 7vh; }
+.modal { background: #fff; border-radius: 10px; width: 640px; max-width: 94vw; max-height: 82vh; display: flex; flex-direction: column; box-shadow: 0 12px 40px rgba(10,25,40,.3); }
+.modal .mh { padding: 15px 20px; border-bottom: 1px solid #eef1f4; font-weight: 600; display: flex; justify-content: space-between; }
+.modal .mb { padding: 14px 20px; overflow: auto; }
+.modal .mf { padding: 13px 20px; border-top: 1px solid #eef1f4; display: flex; justify-content: flex-end; gap: 10px; }
+.modal .x { cursor: pointer; color: #9aa7b1; }
+.doc { border: 1px solid #e3e8ec; border-radius: 7px; padding: 9px 12px; margin-bottom: 7px; display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 13px; }
+.doc:hover { border-color: #16a394; }
+.doc.sel { border-color: #16a394; background: #f0faf8; }
+.doc .info { flex: 1; }
+.doc small { color: #8fa0ac; display: block; }
+.pill { font-size: 10px; border-radius: 8px; padding: 1px 8px; background: #fdecea; color: #c0392b; }
+.pill.ok { background: #e8f7ee; color: #1f9d55; }
+.frow { margin-bottom: 10px; }
+.frow label { display: block; font-size: 12px; color: #5b6b77; margin-bottom: 3px; }
+.frow input { width: 100%; padding: 8px 10px; border: 1px solid #d5dde3; border-radius: 5px; font-size: 13px; }
+.empty { text-align: center; color: #9aa7b1; padding: 34px 10px; }
+.aviso { font-size: 12px; color: #8fa0ac; padding: 8px 12px; }
+/* Sugerencias embebidas */
+#panelSug { padding: 14px 16px; }
+.sug { display: grid; grid-template-columns: 24px 1fr; gap: 8px; align-items: center; padding: 7px 4px; border-bottom: 1px solid #f0f3f5; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="logo">ASE</div>
+  <nav>
+    <a href="/conciliacion" class="act">Conciliación</a>
+    <a href="/conciliacion/sugerencias">Sugerencias</a>
+    <a href="/general">General</a>
+    <a href="/temporadas">Temporadas</a>
+    <a href="/cash-flow">Flujo Caja</a>
+    <a href="/banco/revisar">Revisar Banco</a>
+    <a href="/reporte">Reporte</a>
+  </nav>
+</div>
+<div class="wrap">
+  <div class="kpis">
+    <div class="kpi"><div class="v" id="kPagar">—</div><div class="l">Por Pagar (facturas sin pago, 12 meses)</div></div>
+    <div class="kpi"><div class="v" id="kCobrar">—</div><div class="l">Por Cobrar (cosechas esperadas)</div></div>
+    <div class="kpi"><div class="v" id="kSaldo">—</div><div class="l" id="kSaldoL">Saldo Cta. Corriente</div></div>
+  </div>
+
+  <div class="filtros">
+    <div class="grid">
+      <div><label>Fecha inicial</label><input type="date" id="fDesde"></div>
+      <div><label>Fecha final</label><input type="date" id="fHasta"></div>
+      <div><label>Monto</label><input id="fMonto" placeholder="1.234.567"></div>
+      <div><label>Descripción</label><input id="fQ" placeholder="texto…"></div>
+      <div><label>N° Documento</label><input id="fDoc"></div>
+      <div><label>Categoría</label><select id="fCat"><option value="">Todas</option></select></div>
+    </div>
+    <div style="margin-top:10px; display:flex; gap:8px">
+      <button class="btn" onclick="cargar()">Filtrar</button>
+      <button class="btn sec" onclick="limpiar()">Quitar filtros</button>
+      <span class="aviso" id="aviso"></span>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab act" data-t="todos" onclick="tab('todos')">Todos</div>
+    <div class="tab" data-t="sug" onclick="tab('sug')">Sugerencias ⚡<span class="n" id="nSug">…</span></div>
+    <div class="tab" data-t="abonos" onclick="tab('abonos')">Abonos <span class="n gris" id="nAb">0</span></div>
+    <div class="tab" data-t="cargos" onclick="tab('cargos')">Cargos <span class="n gris" id="nCa">0</span></div>
+    <label class="chk"><input type="checkbox" id="soloPend" onchange="render()"> Por conciliar</label>
+    <span style="margin-left:14px;font-size:12px;color:#7a8894" id="pctConc"></span>
+    <button class="bcar" style="border-radius:4px;margin:0 12px 6px 10px" title="Exportar a Excel"
+            onclick="menuExport(event)">⬇ Exportar</button>
+  </div>
+
+  <div class="card">
+    <div id="panelMov">
+      <table>
+        <thead><tr>
+          <th style="width:90px">Fecha</th><th>Descripción</th>
+          <th style="width:110px">N° Doc.</th>
+          <th class="monto" style="width:110px">Cargo</th>
+          <th class="monto" style="width:110px">Abono</th>
+          <th style="width:190px">Estado Conciliación</th>
+          <th style="width:52px"></th>
+        </tr></thead>
+        <tbody id="tbody"><tr><td colspan="7" class="empty">Cargando…</td></tr></tbody>
+      </table>
+    </div>
+    <div id="panelSug" style="display:none">
+      <button class="btn" id="bAna" onclick="analizarSug()">🔍 Buscar sugerencias (90 días)</button>
+      <button class="btn" id="bApl" onclick="aplicarSug()" disabled style="margin-left:8px">✅ Aplicar seleccionadas</button>
+      <div id="sugList" style="margin-top:12px"><div class="empty">Presiona «Buscar sugerencias»</div></div>
+    </div>
+  </div>
+</div>
+
+<div id="modalBox"></div>
+
+<script>
+const fmt = n => '$' + Math.round(Math.abs(n)).toLocaleString('es-CL');
+const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+let movs = [], tabAct = 'todos', sugMatches = [];
+
+async function kpis() {
+  try {
+    const r = await (await fetch('/api/conciliacion/kpis')).json();
+    document.getElementById('kPagar').textContent = fmt(r.por_pagar);
+    document.getElementById('kCobrar').textContent = fmt(r.por_cobrar);
+    document.getElementById('kSaldo').textContent = fmt(r.saldo);
+    if (r.saldo_fecha) document.getElementById('kSaldoL').textContent =
+      `Saldo Cta. Corriente (al ${r.saldo_fecha})`;
+  } catch (e) {}
+}
+
+function filtros() {
+  const p = new URLSearchParams();
+  const v = id => document.getElementById(id).value.trim();
+  if (v('fDesde')) p.set('desde', v('fDesde'));
+  if (v('fHasta')) p.set('hasta', v('fHasta'));
+  if (v('fMonto')) p.set('monto', v('fMonto'));
+  if (v('fQ')) p.set('q', v('fQ'));
+  if (v('fDoc')) p.set('doc', v('fDoc'));
+  if (v('fCat')) p.set('categoria', v('fCat'));
+  return p;
+}
+
+let comentarios = {};   // {fila: nº de notas}
+
+async function cargar() {
+  document.getElementById('tbody').innerHTML = '<tr><td colspan="7" class="empty">Cargando…</td></tr>';
+  const r = await (await fetch('/api/conciliacion/movimientos?' + filtros())).json();
+  movs = r.movimientos;
+  try {
+    const c = await (await fetch('/api/conciliacion/comentarios')).json();
+    comentarios = {};
+    for (const [k, v] of Object.entries(c.conteo || {})) comentarios[+k] = v;
+  } catch (e) { comentarios = {}; }   // las notas son accesorias: no bloquean la tabla
+  pintarPct();
+  document.getElementById('nAb').textContent = r.conteos.abonos;
+  document.getElementById('nCa').textContent = r.conteos.cargos;
+  document.getElementById('aviso').textContent =
+    `${r.conteos.todos} movimientos · ${r.conteos.pendientes} por conciliar` +
+    (r.truncado ? ' · mostrando los 300 más recientes (usa filtros)' : '');
+  const sel = document.getElementById('fCat');
+  if (sel.options.length <= 1 && r.categorias) {
+    r.categorias.forEach(c => { const o = document.createElement('option'); o.value = o.textContent = c; sel.appendChild(o); });
+  }
+  render();
+}
+
+function limpiar() {
+  ['fDesde','fHasta','fMonto','fQ','fDoc','fCat'].forEach(i => document.getElementById(i).value = '');
+  cargar();
+}
+
+function badge(desc) {
+  const d = desc.toLowerCase();
+  if (d.startsWith('tef ') || d.includes('transferencia')) return '<span class="badge">Transf.</span>';
+  if (d.includes('redcompra')) return '<span class="badge rc">Compra</span>';
+  if (d.startsWith('pago') || d.startsWith('cargo')) return '<span class="badge pg">Pago</span>';
+  return '';
+}
+
+function render() {
+  const pend = document.getElementById('soloPend').checked;
+  let lista = movs;
+  if (tabAct === 'abonos') lista = lista.filter(m => m.abono > 0);
+  if (tabAct === 'cargos') lista = lista.filter(m => m.cargo > 0);
+  if (pend) lista = lista.filter(m => m.estado !== 'conciliado');
+
+  const html = lista.map(m => {
+    let est;
+    if (m.estado === 'conciliado') {
+      est = `<span class="ok">⚡ Conciliado</span><br>
+             <span title="${esc(m.vinculos)}">${esc(m.vinculos.slice(0, 26))}</span>
+             <button class="blink" onclick="verVinculos(${m.fila})">deshacer</button>`;
+    } else {
+      const lbl = m.estado === 'parcial'
+        ? `<span class="par">${fmt(m.saldo)} restante</span>` : `${fmt(m.saldo)} por conciliar`;
+      est = `${lbl}<div class="acc">
+        <button class="bcon" onclick="abrirVincular(${m.fila})">Conciliar</button>
+        <button class="bcar" onclick="menu(event, ${m.fila})">▾</button></div>`;
+    }
+    const n = comentarios[m.fila] || 0;
+    const chat = `<button class="chat ${n ? 'con' : ''}" title="${n ? n + ' nota(s)' : 'Agregar nota'}"
+                    onclick="abrirComentarios(${m.fila})">💬${n ? ' ' + n : ''}</button>`;
+    return `<tr>
+      <td>${m.fecha}</td>
+      <td>${badge(m.desc)}${esc(m.desc.slice(0, 58))}
+          ${m.categoria ? `<br><span class="cat">${esc(m.categoria)}</span>` : ''}</td>
+      <td>${esc(m.doc)}</td>
+      <td class="monto cargo">${m.cargo ? fmt(m.cargo) : ''}</td>
+      <td class="monto abono">${m.abono ? fmt(m.abono) : ''}</td>
+      <td class="est">${est}</td>
+      <td style="text-align:center">${chat}</td></tr>`;
+  }).join('');
+  document.getElementById('tbody').innerHTML =
+    html || '<tr><td colspan="7" class="empty">Sin movimientos con estos filtros</td></tr>';
+}
+
+function tab(t) {
+  tabAct = t;
+  document.querySelectorAll('.tab').forEach(el => el.classList.toggle('act', el.dataset.t === t));
+  document.getElementById('panelMov').style.display = (t === 'sug') ? 'none' : '';
+  document.getElementById('panelSug').style.display = (t === 'sug') ? '' : 'none';
+  if (t !== 'sug') render();
+}
+
+/* ── menú contextual ── */
+function menu(ev, fila) {
+  cerrarMenu();
+  const m = document.createElement('div');
+  m.className = 'menu'; m.id = 'ctxMenu';
+  m.innerHTML = `
+    <div onclick="abrirVincular(${fila})">🔗 Vincular a factura</div>
+    <div onclick="accionSimple(${fila}, 'BALANCE', 'Traspasar a balance (gasto sin documento)')">📊 Traspasar a balance</div>
+    <div onclick="accionSimple(${fila}, 'TERCEROS', 'Cuenta a terceros (préstamo / traspaso)')">👥 Cuenta a terceros</div>
+    <div onclick="accionSimple(${fila}, 'NO CONCILIABLE', 'Marcar como no conciliable')">🚫 No conciliable</div>`;
+  document.body.appendChild(m);
+  m.style.left = Math.min(ev.pageX, window.innerWidth - 240) + 'px';
+  m.style.top = ev.pageY + 'px';
+  setTimeout(() => document.addEventListener('click', cerrarMenu, { once: true }), 0);
+}
+function cerrarMenu() { document.getElementById('ctxMenu')?.remove(); }
+
+/* ── modal vincular a factura ── */
+/* Un movimiento puede pagar VARIOS documentos (Copeval ND agrupadas) y un
+   documento puede pagarse en VARIAS cuotas (S-Invest, plantas de avellano).
+   `elegidos` acumula los documentos con su monto asignado y siempre se muestra
+   cuánto queda por asignar. */
+let elegidos = [], docsBusq = [], filaAct = null, montoMov = 0;
+
+function abrirVincular(fila) {
+  cerrarMenu();
+  filaAct = fila; elegidos = []; docsBusq = [];
+  const m = movs.find(x => x.fila === fila);
+  montoMov = m.saldo;
+  const sugerencia = (m.desc.match(/F\s*(\d{3,})/i) || [])[1] || '';
+  document.getElementById('modalBox').innerHTML = `
+  <div class="overlay" onclick="if(event.target===this) cerrarModal()">
+    <div class="modal">
+      <div class="mh">Conciliar movimiento — ${m.fecha} · ${fmt(m.saldo)}
+        <span class="x" onclick="cerrarModal()">✕</span></div>
+      <div class="mb">
+        <div style="font-size:12px;color:#7a8894;margin-bottom:10px">${esc(m.desc.slice(0, 80))}</div>
+        <div class="frow"><label>Buscar documento (n°, proveedor o monto)</label>
+          <input id="busca" value="${esc(sugerencia)}" placeholder="ej: 6431858, copeval, 483655"
+                 oninput="buscarDocs()" autocomplete="off"></div>
+        <div id="docs"><div class="empty">Escribe para buscar…</div></div>
+        <div id="elegidos"></div>
+        <div class="frow" style="margin-top:10px"><label>Nota (opcional)</label><input id="notaV"></div>
+      </div>
+      <div class="mf">
+        <div id="saldoAsig" style="margin-right:auto;font-size:13px"></div>
+        <button class="btn sec" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn" id="bVinc" onclick="confirmarVinculo()" disabled>Conciliar</button>
+      </div>
+    </div>
+  </div>`;
+  pintarElegidos();
+  if (sugerencia) buscarDocs();
+  document.getElementById('busca').focus();
+}
+function cerrarModal() { document.getElementById('modalBox').innerHTML = ''; }
+
+let buscaTimer = null;
+function buscarDocs() {
+  clearTimeout(buscaTimer);
+  buscaTimer = setTimeout(async () => {
+    const q = document.getElementById('busca').value.trim();
+    if (q.length < 2) return;
+    const r = await (await fetch('/api/conciliacion/buscar-docs?q=' + encodeURIComponent(q))).json();
+    docsBusq = r.docs || [];
+    const box = document.getElementById('docs');
+    if (!docsBusq.length) { box.innerHTML = '<div class="empty">Sin resultados</div>'; return; }
+    box.innerHTML = docsBusq.map((d, i) => {
+      const ya = elegidos.some(e => e.nro === d.nro && e.prov === d.prov);
+      // saldo_doc: lo que falta por cubrir del documento (pagos en cuotas)
+      const parcial = d.estado_doc === 'parcial'
+        ? `<small style="color:#a06d00">ya asignado ${fmt(d.asignado)} · falta ${fmt(d.saldo_doc)}</small>` : '';
+      return `
+      <div class="doc ${ya ? 'sel' : ''}" onclick="agregarDoc(${i})">
+        <div class="info">F${esc(d.nro)} · ${esc(d.prov.slice(0, 38))}
+          <small>${d.emision || 's/f'}${d.narch ? ' · N° archivo ' + d.narch : ''}</small>${parcial}</div>
+        <div class="monto">${fmt(d.total)}</div>
+        <span class="pill ${d.estado_doc === 'pagado' ? 'ok' : ''}">${d.estado_doc || (d.pagada ? 'pagada' : 'pendiente')}</span>
+      </div>`;
+    }).join('');
+  }, 300);
+}
+
+function porAsignar() {
+  const usado = elegidos.reduce((s, e) => s + (parseFloat(e.monto) || 0), 0);
+  return Math.round(montoMov - usado);
+}
+
+function agregarDoc(i) {
+  const d = docsBusq[i];
+  if (elegidos.some(e => e.nro === d.nro && e.prov === d.prov)) return;
+  // Se propone lo menor entre lo que falta del movimiento y lo que falta del documento
+  const faltaDoc = (d.saldo_doc != null && d.saldo_doc > 0) ? d.saldo_doc : d.total;
+  const monto = Math.max(0, Math.min(porAsignar(), faltaDoc || porAsignar()));
+  elegidos.push({nro: d.nro, prov: d.prov, filas: d.filas, total: d.total, monto: Math.round(monto)});
+  pintarElegidos();
+  buscarDocs();
+}
+
+function quitarDoc(i) { elegidos.splice(i, 1); pintarElegidos(); buscarDocs(); }
+
+function cambiarMonto(i, v) {
+  elegidos[i].monto = parseFloat(v) || 0;
+  pintarSaldo();
+}
+
+function pintarElegidos() {
+  const box = document.getElementById('elegidos');
+  if (!box) return;
+  box.innerHTML = elegidos.length ? `
+    <div style="margin-top:12px;font-size:12px;color:#5b6b77">Documentos a conciliar (${elegidos.length})</div>
+    ${elegidos.map((e, i) => `
+      <div class="doc sel" style="cursor:default">
+        <div class="info">F${esc(e.nro)} · ${esc(e.prov.slice(0, 30))}
+          <small>total ${fmt(e.total)}</small></div>
+        <input value="${e.monto}" style="width:120px;padding:5px 7px;border:1px solid #d5dde3;border-radius:5px;text-align:right"
+               onchange="cambiarMonto(${i}, this.value)">
+        <button class="blink" onclick="quitarDoc(${i})">quitar</button>
+      </div>`).join('')}` : '';
+  pintarSaldo();
+}
+
+function pintarSaldo() {
+  const falta = porAsignar();
+  const el = document.getElementById('saldoAsig');
+  if (!el) return;
+  const color = falta === 0 ? '#1f9d55' : (falta < 0 ? '#c0392b' : '#a06d00');
+  el.innerHTML = elegidos.length
+    ? `<span style="color:${color}">${falta === 0 ? '✓ Calza exacto'
+        : falta > 0 ? 'Quedan ' + fmt(falta) + ' por asignar'
+        : 'Excede en ' + fmt(-falta)}</span>`
+    : '';
+  const btn = document.getElementById('bVinc');
+  if (btn) {
+    btn.disabled = !elegidos.length || falta < 0;
+    btn.textContent = elegidos.length > 1 ? `Conciliar ${elegidos.length} documentos` : 'Conciliar';
+  }
+}
+
+async function confirmarVinculo() {
+  if (!elegidos.length) return;
+  const btn = document.getElementById('bVinc');
+  const txt = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  const nota = document.getElementById('notaV').value;
+  const body = {
+    fila_banco: filaAct,
+    docs: elegidos.map(e => ({
+      tipo_doc: 'FACTURA', nro_doc: e.nro, proveedor: e.prov,
+      filas_doc: e.filas, monto: e.monto, nota,
+    })),
+  };
+  const r = await fetch('/api/conciliacion/vincular-multiple', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body) });
+  if (r.ok) { cerrarModal(); await cargar(); }
+  else {
+    const d = await r.json();
+    alert('Error: ' + (d.error || '?') +
+      (d.disponible != null ? `\n\nDisponible: ${fmt(d.disponible)}` : ''));
+    btn.disabled = false; btn.textContent = txt;
+  }
+}
+
+/* ── Notas por movimiento (💬) ── */
+async function abrirComentarios(fila) {
+  cerrarMenu();
+  const m = movs.find(x => x.fila === fila) || {};
+  const r = await (await fetch('/api/conciliacion/comentarios?fila=' + fila)).json();
+  const lista = r.comentarios || [];
+  document.getElementById('modalBox').innerHTML = `
+  <div class="overlay" onclick="if(event.target===this) cerrarModal()">
+    <div class="modal">
+      <div class="mh">Notas del movimiento <span class="x" onclick="cerrarModal()">✕</span></div>
+      <div class="mb">
+        <div style="font-size:12px;color:#7a8894;margin-bottom:12px">
+          ${m.fecha || ''} · ${esc((m.desc || '').slice(0, 70))}</div>
+        <div id="listaNotas">${lista.length ? lista.map(c => `
+          <div class="nota">${esc(c.texto)}
+            <div class="meta">${c.fecha}${c.usuario ? ' · ' + esc(c.usuario) : ''}
+              <button class="blink" onclick="borrarNota(${c.id}, ${fila})">borrar</button></div>
+          </div>`).join('') : '<div class="empty">Sin notas todavía</div>'}</div>
+        <div class="frow" style="margin-top:12px"><label>Nueva nota</label>
+          <input id="txtNota" placeholder="ej: adelanto convenido con el proveedor"
+                 onkeydown="if(event.key==='Enter') guardarNota(${fila})"></div>
+      </div>
+      <div class="mf">
+        <button class="btn sec" onclick="cerrarModal()">Cerrar</button>
+        <button class="btn" onclick="guardarNota(${fila})">Guardar nota</button>
+      </div>
+    </div>
+  </div>`;
+  document.getElementById('txtNota').focus();
+}
+
+async function guardarNota(fila) {
+  const txt = document.getElementById('txtNota').value.trim();
+  if (!txt) return;
+  const r = await fetch('/api/conciliacion/comentar', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fila_banco: fila, texto: txt }) });
+  if (!r.ok) { alert('No pude guardar la nota'); return; }
+  comentarios[fila] = (comentarios[fila] || 0) + 1;
+  render();
+  abrirComentarios(fila);
+}
+
+async function borrarNota(id, fila) {
+  await fetch('/api/conciliacion/comentario/' + id, { method: 'DELETE' });
+  comentarios[fila] = Math.max(0, (comentarios[fila] || 1) - 1);
+  render();
+  abrirComentarios(fila);
+}
+
+/* ── Exportar a Excel ── */
+function menuExport(ev) {
+  ev.stopPropagation();
+  cerrarMenu();
+  const opciones = [
+    ['todos', 'Todo el movimiento'],
+    ['pendiente', 'Solo lo pendiente'],
+    ['parcial', 'Solo lo parcial'],
+    ['conciliado', 'Solo lo conciliado'],
+  ];
+  const d = document.createElement('div');
+  d.className = 'menu';
+  d.id = 'menuAct';
+  d.style.left = (ev.pageX - 150) + 'px';
+  d.style.top = (ev.pageY + 8) + 'px';
+  d.innerHTML = opciones.map(([k, t]) =>
+    `<div onclick="exportar('${k}')">⬇ ${t}</div>`).join('');
+  document.body.appendChild(d);
+}
+
+function exportar(estado) {
+  cerrarMenu();
+  const p = new URLSearchParams({ estado });
+  const d = document.getElementById('fDesde'), h = document.getElementById('fHasta');
+  if (d && d.value) p.set('desde', d.value);
+  if (h && h.value) p.set('hasta', h.value);
+  window.location = '/api/conciliacion/exportar?' + p;
+}
+
+/* % conciliado del período filtrado, junto a las pestañas */
+async function pintarPct() {
+  try {
+    const p = new URLSearchParams();
+    const d = document.getElementById('fDesde'), h = document.getElementById('fHasta');
+    if (d && d.value) p.set('desde', d.value);
+    if (h && h.value) p.set('hasta', h.value);
+    const r = await (await fetch('/api/conciliacion/resumen-estado?' + p)).json();
+    document.getElementById('pctConc').textContent =
+      r.movimientos ? `${r.pct}% conciliado · ${fmt(r.monto_pendiente)} pendiente` : '';
+  } catch (e) { /* accesorio */ }
+}
+
+/* ── balance / terceros / no conciliable ── */
+async function accionSimple(fila, tipo, titulo) {
+  cerrarMenu();
+  const nota = prompt(titulo + '\n\nNota (motivo):', '');
+  if (nota === null) return;
+  const r = await fetch('/api/conciliacion/vincular', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fila_banco: fila, tipo_doc: tipo, nota }) });
+  if (r.ok) await cargar(); else alert('Error: ' + ((await r.json()).error || '?'));
+}
+
+/* ── ver vínculos / deshacer ── */
+async function verVinculos(fila) {
+  const r = await (await fetch('/api/conciliacion/vinculos?fila=' + fila)).json();
+  if (!r.vinculos.length) { await cargar(); return; }
+  const lineas = r.vinculos.map(v =>
+    `#${v.id} · ${v.tipo}${v.nro ? ' F' + v.nro : ''} ${v.prov} — ${fmt(v.monto)} (${v.criterio})`).join('\n');
+  const id = prompt('Vínculos de este movimiento:\n' + lineas +
+                    '\n\nEscribe el ID a ELIMINAR (o cancela):');
+  if (!id) return;
+  const res = await fetch('/api/conciliacion/desconciliar', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: parseInt(id) }) });
+  if (res.ok) await cargar();
+}
+
+/* ── sugerencias (motor existente) ── */
+async function analizarSug() {
+  const b = document.getElementById('bAna');
+  b.disabled = true; b.textContent = '⏳ Analizando (incluye IA)…';
+  document.getElementById('sugList').innerHTML = '<div class="empty">Analizando banco ↔ facturas…</div>';
+  try {
+    const r = await (await fetch('/api/conciliacion?dias=90&ia=1')).json();
+    sugMatches = r.matches || [];
+    document.getElementById('nSug').textContent = sugMatches.length;
+    document.getElementById('sugList').innerHTML = sugMatches.length ? sugMatches.map((m, i) => `
+      <div class="sug"><input type="checkbox" class="sgc" data-i="${i}" checked onchange="updSug()">
+        <div>${m.fecha} · <b>${fmt(m.monto)}</b> ${esc(m.desc.slice(0, 44))}
+          &nbsp;→&nbsp; F${esc(m.nro)} ${esc(m.prov.slice(0, 30))}
+          <span class="cat">[${esc(m.criterio)}]</span></div></div>`).join('')
+      : '<div class="empty">Sin sugerencias nuevas 🎉</div>';
+    updSug();
+  } catch (e) {
+    document.getElementById('sugList').innerHTML = `<div class="empty">Error: ${e.message}</div>`;
+  }
+  b.disabled = false; b.textContent = '🔍 Buscar sugerencias (90 días)';
+}
+function updSug() {
+  const n = document.querySelectorAll('.sgc:checked').length;
+  const b = document.getElementById('bApl');
+  b.disabled = n === 0; b.textContent = `✅ Aplicar seleccionadas (${n})`;
+}
+async function aplicarSug() {
+  const sel = [...document.querySelectorAll('.sgc:checked')].map(c => sugMatches[+c.dataset.i]);
+  if (!sel.length || !confirm(`¿Conciliar ${sel.length} movimientos?`)) return;
+  const b = document.getElementById('bApl');
+  b.disabled = true; b.textContent = '💾 Aplicando…';
+  const r = await fetch('/api/conciliacion/aplicar', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ matches: sel }) });
+  if (r.ok) { await cargar(); analizarSug(); }
+  else { alert('Error: ' + ((await r.json()).error || '?')); }
+  b.textContent = '✅ Aplicar seleccionadas (0)';
+}
+
+/* init */
+kpis(); cargar();
+fetch('/api/conciliacion?dias=90&ia=0').then(r => r.json())
+  .then(r => { sugMatches = r.matches || []; document.getElementById('nSug').textContent = sugMatches.length; })
+  .catch(() => { document.getElementById('nSug').textContent = '?'; });
+</script>
+</body>
+</html>

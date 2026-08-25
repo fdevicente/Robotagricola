@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Sin permiso — Agrícola Santa Elisa</title>
+<style>
+body { font-family: -apple-system, "Segoe UI", Arial, sans-serif; background: #f4f6f8;
+       margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+.box { background: #fff; border-radius: 10px; padding: 34px 38px; text-align: center;
+       box-shadow: 0 2px 12px rgba(20,40,60,.1); max-width: 460px; }
+h1 { font-size: 20px; color: #22323c; margin: 10px 0 8px; }
+p { color: #6b7b87; font-size: 14px; line-height: 1.6; }
+a { display: inline-block; margin-top: 16px; background: #16a394; color: #fff;
+    padding: 10px 20px; border-radius: 6px; text-decoration: none; font-size: 14px; }
+.ico { font-size: 40px; }
+</style>
+</head>
+<body>
+  <div class="box">
+    <div class="ico">🔒</div>
+    <h1>No tienes acceso a esta sección</h1>
+    <p>Tu perfil{% if user %} (<b>{{ user.rol_label }}</b>){% endif %}
+       no incluye el permiso <b>{{ permiso }}</b>.<br>
+       Si necesitas entrar, pídeselo al administrador.</p>
+    <a href="/">Volver al inicio</a>
+  </div>
+</body>
+</html>

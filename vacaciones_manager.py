@@ -7,6 +7,7 @@ from datetime import date, datetime
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from config import EXCEL_PATH
+from excel_manager import _save_wb  # guardado con reintentos si Excel está abierto
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,7 @@ def crear_hojas_vacaciones():
     wb = _open_wb()
     _ensure_personal(wb)
     _ensure_vacaciones(wb)
-    wb.save(EXCEL_PATH)
+    _save_wb(wb)
 
 
 def agregar_trabajador(nombre: str, rut: str = "", cargo: str = "",
@@ -90,7 +91,7 @@ def agregar_trabajador(nombre: str, rut: str = "", cargo: str = "",
         dias_acumulados = 0
 
     ws.append([nombre, rut, cargo, fecha_ingreso, dias_acumulados, 0, ""])
-    wb.save(EXCEL_PATH)
+    _save_wb(wb)
     logger.info(f"Trabajador agregado: {nombre}, {dias_acumulados} días pendientes")
     return True
 
@@ -127,7 +128,7 @@ def registrar_vacacion(nombre: str, fecha_inicio: str, fecha_fin: str,
             ws_per.cell(row=row_idx, column=7).value = fecha_inicio
             break
 
-    wb.save(EXCEL_PATH)
+    _save_wb(wb)
     logger.info(f"Vacación registrada: {nombre}, {dias_habiles} días hábiles")
     return {"nombre": nombre, "inicio": fecha_inicio, "fin": fecha_fin,
             "dias_habiles": dias_habiles, "dias_corridos": dias}
@@ -175,7 +176,7 @@ def actualizar_dias_mensuales():
         ws.cell(row=row_idx, column=5).value = round(pendientes + incremento, 1)
         actualizados += 1
 
-    wb.save(EXCEL_PATH)
+    _save_wb(wb)
     logger.info(f"Vacaciones actualizadas: +{incremento} días a {actualizados} trabajadores")
     return {"actualizados": actualizados, "incremento": incremento}
 

@@ -15,8 +15,14 @@ from config import EXCEL_PATH
 logger = logging.getLogger(__name__)
 
 
-def _save_wb(wb, path=EXCEL_PATH, intentos=5, espera=4):
-    """Guarda el workbook con reintentos si el archivo está bloqueado por Excel."""
+def _save_wb(wb, path=None, intentos=5, espera=4):
+    """Guarda el workbook con reintentos si el archivo está bloqueado por Excel.
+
+    El destino se resuelve EN CADA LLAMADA, no al importar el módulo: con el
+    default fijo, cualquier código que cargara otro archivo y llamara
+    `_save_wb(wb)` sin argumento terminaba escribiéndolo encima del Master real.
+    """
+    path = path or EXCEL_PATH
     for intento in range(1, intentos + 1):
         try:
             wb.save(path)
@@ -112,6 +118,11 @@ def ensure_cash_flow_sheets(path=None):
         "Cultivo", "Monto", "Razón", "Activo"
     ])
 
+    # Cuenta en dólares: a los exportadores se les cobra en USD y ese efectivo
+    # no pasa por la cuenta corriente. Ver modules/cuentas.py
+    from modules.cuentas import DOLAR_SHEET, DOLAR_HEADERS
+    _ensure_sheet_with_headers(wb, DOLAR_SHEET, DOLAR_HEADERS)
+
     if CONFIG_SHEET not in wb.sheetnames:
         ws = wb.create_sheet(CONFIG_SHEET)
         ws.append(["Parámetro", "Valor"])
@@ -123,7 +134,7 @@ def ensure_cash_flow_sheets(path=None):
         ws.append(["Año", "Nogales", "Cerezos", "Avellanos", "Notas"])
         ws.append([2024, 65, 1.8, 0, "Sin avellanos"])
         ws.append([2025, 54, 3.8, 11.5, "Inicio replante avellanos"])
-        ws.append([2026, 43, 3.8, 26.5, "+15 hc avellanos"])
+        ws.append([2026, 46.82, 3.9, 16.6, "Replante avellanos en curso"])
 
     if FLUJO_CAJA_SHEET not in wb.sheetnames:
         wb.create_sheet(FLUJO_CAJA_SHEET)
@@ -334,6 +345,20 @@ def append_to_excel(items: list) -> bool:
             cell.value = total_factura
             cell.number_format = '#,##0'
             cell.alignment = Alignment(horizontal="right", vertical="center")
+
+        # N° de archivo físico (correlativo de FXP) — para ubicar el papel impreso
+        try:
+            from modules.correlativo import (correlativo_para, asegurar_columna,
+                                              COL_CORRELATIVO)
+            asegurar_columna(ws)
+            n_arch = correlativo_para(items[0].get("Nombre Factura / Proveedor"),
+                                      items[0].get("Numero Factura / Nro Documento"))
+            if n_arch:
+                for row_num in range(first_new_row, last_new_row + 1):
+                    ws.cell(row=row_num, column=COL_CORRELATIVO).value = n_arch
+                logger.info(f"N° de archivo asignado: {n_arch}")
+        except Exception as e:
+            logger.warning(f"No pude asignar el N° de archivo: {e}")
 
         _save_wb(wb)
         logger.info(f"Excel actualizado con {len(items)} fila(s). Total Factura: ${total_factura:,.0f}")
@@ -711,21 +736,49 @@ def guardar_movimientos_banco(movimientos: list[dict]) -> dict:
         wb = _open_wb()
         ws = _ensure_banco_sheet(wb)
 
-        # Leer movimientos existentes para detectar duplicados
+        def _fecha_iso(v):
+            """Normaliza a 'YYYY-MM-DD' venga como date, datetime o texto."""
+            if isinstance(v, datetime):
+                return v.date().isoformat()
+            if isinstance(v, date):
+                return v.isoformat()
+            s = str(v or "").strip()
+            for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y"):
+                try:
+                    return datetime.strptime(s[:10], fmt).date().isoformat()
+                except ValueError:
+                    continue
+            return s
+
+        def _doc(v):
+            s = str(v or "").strip()
+            return s[:-2] if s.endswith(".0") else s
+
+        # Movimientos existentes: por N° de documento (único) y por
+        # (fecha, cargo, abono). La fecha se normaliza en AMBOS lados: si se
+        # compara texto contra fecha, nada calza y se reinsertan todos.
+        docs_existentes = set()
         existentes = set()
         for row in ws.iter_rows(min_row=2, values_only=True):
-            if row[0]:
-                key = (str(row[0]).strip(), str(row[1] or "").strip(),
-                       float(row[3] or 0), float(row[4] or 0))
-                existentes.add(key)
+            if not row or not row[0]:
+                continue
+            ref = _doc(row[2] if len(row) > 2 else "")
+            if ref:
+                docs_existentes.add(ref)
+            existentes.add((_fecha_iso(row[0]),
+                            int(round(float(row[3] or 0))),
+                            int(round(float(row[4] or 0)))))
 
         nuevos = 0
         duplicados = 0
         for mov in movimientos:
-            key = (str(mov.get("fecha", "")).strip(),
-                   str(mov.get("descripcion", "")).strip(),
-                   float(mov.get("cargo", 0)),
-                   float(mov.get("abono", 0)))
+            ref = _doc(mov.get("referencia"))
+            if ref and ref in docs_existentes:
+                duplicados += 1
+                continue
+            key = (_fecha_iso(mov.get("fecha")),
+                   int(round(float(mov.get("cargo", 0) or 0))),
+                   int(round(float(mov.get("abono", 0) or 0))))
             if key in existentes:
                 duplicados += 1
                 continue
@@ -739,6 +792,8 @@ def guardar_movimientos_banco(movimientos: list[dict]) -> dict:
                 mov.get("saldo", 0) or None,
             ])
             existentes.add(key)
+            if ref:
+                docs_existentes.add(ref)
             nuevos += 1
 
         _save_wb(wb)
