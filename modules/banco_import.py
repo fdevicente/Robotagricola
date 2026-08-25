@@ -166,6 +166,24 @@ def _en_orden_cronologico(movs: list[dict]) -> list[dict]:
                                   key=lambda p: (p[1]["fecha"], orden * p[0]))]
 
 
+def _doc_identificador(doc) -> str:
+    """El N° de documento, o "" si es un relleno que no identifica nada.
+
+    El banco pone **0** en las compras con tarjeta (REDCOMPRA). Tratarlo como
+    identificador hacía que, apenas existiera UNA fila con documento 0 en el
+    Master, cualquier movimiento nuevo con doc 0 se descartara como duplicado:
+    el 25-ago-2026 se perdieron así dos compras en Ferretería M y G.
+    Sin identificador, la dedup cae al multiconjunto (fecha, cargo, abono),
+    que sí distingue movimientos distintos del mismo día.
+    """
+    s = str(doc or "").strip()
+    if not s:
+        return ""
+    if set(s) <= {"0"} or set(s) <= {"-"}:      # "0", "000", "-", "--"
+        return ""
+    return s
+
+
 def _clave(fecha, cargo, abono, decimales=0):
     """Clave de deduplicación. En USD los montos traen centavos y redondear a
     entero juntaría movimientos distintos, así que se conserva el decimal."""
@@ -185,7 +203,7 @@ def _indices_master(hoja: str = None, decimales: int = 0):
         if not f:
             continue
         n += 1
-        ref = str(row[COL_REF - 1] or "").strip()
+        ref = _doc_identificador(row[COL_REF - 1])
         if ref:
             docs.add(ref)
         conteo[_clave(f, _num(row[COL_CARGO - 1]),
@@ -209,7 +227,8 @@ def analizar_cartola(path: str, hoja: str = None, decimales: int = 0) -> dict:
     vistos = Counter()
     for m in movs:
         clave = _clave(m["fecha"], m["cargo"], m["abono"], decimales)
-        if m["doc"] and m["doc"] in docs:
+        doc = _doc_identificador(m["doc"])
+        if doc and doc in docs:
             dups.append(m)
             continue
         # multiconjunto: solo es duplicado si el Master ya tiene tantas copias
@@ -251,7 +270,9 @@ def importar_cartola(path: str, hoja: str = None, decimales: int = 0) -> dict:
         fila += 1
         ws.cell(fila, COL_FECHA).value = m["fecha"]
         ws.cell(fila, COL_DESC).value = m["desc"]
-        ws.cell(fila, COL_REF).value = m["doc"]      # N° doc → dedup futuro exacto
+        # N° doc → dedup futuro exacto. El relleno "0" se guarda vacío: si se
+        # escribiera, volvería a colisionar con la próxima compra con tarjeta.
+        ws.cell(fila, COL_REF).value = _doc_identificador(m["doc"]) or None
         ws.cell(fila, COL_CARGO).value = m["cargo"] or None
         ws.cell(fila, COL_ABONO).value = m["abono"] or None
         ws.cell(fila, COL_SALDO).value = m["saldo"]
