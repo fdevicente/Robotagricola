@@ -14,7 +14,7 @@ Sacar los documentos del disco del PC y llevarlos a Google Drive, de modo que:
 
 Esto va **antes** del salto al servidor (Fase C del plan de julio) a propósito: con
 los archivos ya en la nube, el VPS solo carga aplicación y base de datos, y no hay
-2,3 GB de PDFs que migrar después ni un disco que se quede chico.
+PDFs que migrar después ni un disco que se quede chico.
 
 ## Decisiones tomadas
 
@@ -55,12 +55,12 @@ solo usuario.
 ```
 Agrícola Santa Elisa/
 ├── Facturas Recibidas/2024/ 2025/ 2026/     817 archivos, 111 MB
-├── Facturas Enviadas/                        19
-├── Boletas Honorarios/                       60
-├── Guías de Despacho/                        16
-├── Rendiciones/                               9
-├── Legal/                                    57 archivos, 1,6 GB
-├── Tributario/
+├── Facturas Enviadas/                        19 archivos, 4 MB
+├── Boletas Honorarios/                       60 archivos, 10 MB
+├── Guías de Despacho/                        16 archivos, 4 MB
+├── Rendiciones/                               9 archivos, 53 MB
+├── Legal/                                    26 archivos, 18 MB
+├── Tributario/                                5 archivos, 1 MB
 ├── Reportes/                                 PDF mensuales
 ├── Respaldos/
 │   ├── Master/
@@ -71,7 +71,11 @@ Agrícola Santa Elisa/
 
 Nombres: se mantiene `Proveedor_NroFactura.ext`, que `_renombrar_archivo` ya aplica.
 
-Volumen actual **2,3 GB** de 15 GB. Crecimiento de facturas ~30 MB/año.
+**Volumen actual: 201 MB** de 15 GB (1,3%). Crecimiento de facturas ~30 MB/año.
+
+> Medido originalmente en 2,3 GB. El 26-ago el dueño borró una carpeta que se
+> había colado dentro de `Legal`, que pasó de 1,6 GB a 18 MB. La migración dejó
+> de ser un problema de volumen.
 
 ## Flujos
 
@@ -131,9 +135,11 @@ Con un **Drive falso, sin red**:
 
 ## Riesgos
 
-- **La primera migración son 2,3 GB.** Conviene subirla por lotes y verificar
-  conteos por carpeta antes de dar por buena ninguna.
+- **La migración son 201 MB en ~950 archivos.** El volumen dejó de ser un riesgo;
+  lo que sí conviene es subirla por lotes y verificar conteos por carpeta, porque
+  el riesgo real es perder la pista de un archivo, no el espacio.
 - **La advertencia de "app no verificada"** puede asustar al autorizar. Es esperable
   y se acepta una sola vez.
-- **La carpeta Legal son 1,6 GB en 57 archivos.** Vale confirmar que todo eso debe
-  estar en Drive antes de subirlo.
+- **La pantalla de consentimiento debe quedar en "In production".** En modo
+  *Testing* el token de refresco se vence a los 7 días y el robot pediría
+  reautorizar todas las semanas.

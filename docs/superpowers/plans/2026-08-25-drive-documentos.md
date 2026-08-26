@@ -21,7 +21,7 @@
 | `modules/drive/cola.py` | Cola de subidas persistida en disco, con reintentos. |
 | `modules/drive/carpetas.py` | Resolver y crear la estructura de carpetas; cachear los IDs. |
 | `handlers/drive_entrada.py` | Job que revisa `_Entrada/` y procesa lo que aparezca. |
-| `scripts/carga/migrar_documentos_a_drive.py` | Migración única de los 2,3 GB. Se corre a mano. |
+| `scripts/carga/migrar_documentos_a_drive.py` | Migración única de los ~200 MB. Se corre a mano. |
 | `infrastructure/backups.py` *(modificar)* | Subir respaldos a Drive + retención. |
 | `handlers/facturas.py` *(modificar)* | Encolar la subida después de guardar en disco. |
 | `main.py` *(modificar)* | Registrar los jobs de cola y de entrada. |
@@ -1879,11 +1879,11 @@ git commit -m "Carpeta de entrada conectada al lector de documentos"
 
 ---
 
-### Task 13: Migración de los 2,3 GB existentes
+### Task 13: Migración de los documentos existentes (~200 MB)
 
 **Se corre al final**, con todo lo anterior andando y verificado.
 
-Se corre **a mano, una vez**, y por lotes: son 817 facturas y 1,6 GB en Legal.
+Se corre **a mano, una vez**, y por lotes: son ~950 archivos, 201 MB en total.
 
 **Files:**
 - Create: `scripts/carga/migrar_documentos_a_drive.py`
@@ -1896,7 +1896,8 @@ Crear `scripts/carga/migrar_documentos_a_drive.py`:
 # -*- coding: utf-8 -*-
 """Migración única de los documentos locales a Drive.
 
-Se corre por CARPETA, no todo de una: son 2,3 GB y conviene verificar conteos
+Se corre por CARPETA, no todo de una: el riesgo no es el espacio (201 MB de 15 GB)
+sino perder la pista de un archivo, así que conviene verificar conteos
 antes de dar por buena cada tanda.
 
 Uso:
@@ -1997,7 +1998,7 @@ En este orden, verificando el conteo en Drive antes de pasar a la siguiente:
 4. `BH` (60)
 5. `Rendiciones` (9, 53 MB)
 6. `Facturas Recibidas` (817, 111 MB)
-7. `Legal` (57, **1,6 GB** — confirmar antes con el dueño si todo eso debe ir)
+7. `Legal` (26 archivos, 18 MB)
 
 ---
 
@@ -2006,4 +2007,5 @@ En este orden, verificando el conteo en Drive antes de pasar a la siguiente:
 1. En [Google Cloud Console](https://console.cloud.google.com), con la cuenta nueva del robot: crear un proyecto, habilitar la **Google Drive API**, y crear un **ID de cliente OAuth** de tipo **Aplicación de escritorio**.
 2. Bajar el JSON y guardarlo como `Robot/.drive_client_secret.json`.
 3. Correr `python scripts/autorizar_drive.py`, aceptar la advertencia de app no verificada.
-4. Confirmar si la carpeta **Legal** (1,6 GB) va a Drive o se queda local.
+4. Dejar la pantalla de consentimiento en **In production** (en *Testing* el token
+   se vence cada 7 días).
