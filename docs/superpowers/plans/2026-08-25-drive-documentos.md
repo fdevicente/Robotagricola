@@ -1362,7 +1362,16 @@ git commit -m "Carpeta de entrada de Drive: procesar y mover"
 
 ---
 
-### Task 10: Registrar los jobs y el aviso de cuota
+### Task 10: Registrar los jobs, el aviso de cuota y el comando /drive
+
+⚠️ **AGREGADO 26-ago tras verificar la Tarea 6.** Con el job cada 10 minutos, los
+5 intentos se agotan en 50 minutos: un corte de internet más largo dejaba el
+documento en "rendido" y el subidor **no lo miraba nunca más**. El archivo quedaba
+a salvo en el PC pero sin forma de llegar a Drive.
+`Cola.reintentar_rendidos()` ya existe (commiteado aparte). **Esta tarea debe
+exponerlo**: un comando **`/drive`** en Telegram que muestre cuántas subidas hay
+pendientes y cuántas rendidas, y ofrezca reintentar las rendidas. Sin eso el
+mecanismo existe pero nadie puede dispararlo.
 
 **Files:**
 - Modify: `main.py`

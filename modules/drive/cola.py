@@ -57,6 +57,9 @@ class Cola:
                 elif tipo == "error":
                     items[iid]["intentos"] += 1
                     items[iid]["ultimo_error"] = e.get("motivo", "")
+                elif tipo == "reintento":
+                    # borrón y cuenta nueva: vuelve a pendientes
+                    items[iid]["intentos"] = 0
         return items
 
     def pendientes(self) -> list[dict]:
@@ -90,3 +93,18 @@ class Cola:
 
     def marcar_error(self, iid: str, motivo: str) -> None:
         self._append({"evento": "error", "id": iid, "motivo": str(motivo)[:200]})
+
+    def reintentar_rendidos(self) -> int:
+        """Devuelve a la cola los que agotaron sus intentos. Cuántos revivió.
+
+        Con el job cada 10 minutos los 5 intentos se agotan en 50 minutos, así
+        que un corte de internet más largo —nada raro en el campo— dejaba el
+        documento varado para siempre: a salvo en el PC, pero sin forma de que
+        llegara a Drive. Los que ya subieron no se tocan.
+        """
+        rendidos = self.rendidos()
+        for i in rendidos:
+            self._append({"evento": "reintento", "id": i["id"]})
+        if rendidos:
+            logger.info("Drive: %d subida(s) devueltas a la cola", len(rendidos))
+        return len(rendidos)
