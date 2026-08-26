@@ -20,8 +20,13 @@ def carpeta_para(datos: dict) -> str:
     """
     from datetime import date
     tipo = str(datos.get("tipo") or "").lower()
-    if tipo == "boleta":
+    if tipo == "honorarios":
         return "Boletas Honorarios"
+    if tipo == "boleta":
+        # Boleta de COMPRA (supermercado, ferretería). Va aparte de las
+        # facturas porque el bot ya las separa en el PC: config.BOLETAS_DIR
+        # es distinto de DOWNLOAD_DIR.
+        return "Boletas"
     if tipo == "guia":
         return "Guías de Despacho"
     if tipo == "factura":

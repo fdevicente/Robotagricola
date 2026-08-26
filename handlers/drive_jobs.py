@@ -114,16 +114,30 @@ async def job_drive_cola(context):
                     parse_mode="Markdown")
 
 
+def _tipo_de_documento(documento: str) -> str:
+    """Clasifica el nombre del documento en honorarios / boleta / factura.
+
+    OJO con el orden: "Boleta de Honorarios" CONTIENE la palabra "boleta", así
+    que la honorarios tiene que evaluarse primero o quedaría clasificada como
+    boleta de compra.
+    """
+    doc = str(documento or "").lower()
+    if "honorario" in doc:
+        return "honorarios"
+    if "boleta" in doc:
+        return "boleta"
+    return "factura"
+
+
 def _extraer(ruta_local: str) -> dict:
     """Llama al extractor real (Claude/Ollama) y arma {tipo, fecha}.
 
     `process_file` (processors/extractor.py) solo entiende documentos de
     compra: facturas, notas de crédito/débito, boletas comunes y boletas de
-    honorarios. Solo la boleta de honorarios tiene carpeta propia
-    ("Boletas Honorarios"); todo lo demás que el extractor reconozca se
-    clasifica como "factura" y va por año. Las guías de despacho NO las lee
-    el extractor todavía: quedan en _Entrada/Sin procesar hasta que se
-    amplíe, y eso es esperado, no un bug.
+    honorarios. Cada uno va a su propia carpeta — las boletas de compra NO se
+    mezclan con las facturas, igual que el bot ya las separa en el PC.
+    Las guías de despacho NO las lee el extractor todavía: quedan en
+    _Entrada/Sin procesar hasta que se amplíe, y eso es esperado, no un bug.
     """
     from processors.extractor import process_file
     resultado = process_file(ruta_local)
@@ -131,9 +145,8 @@ def _extraer(ruta_local: str) -> dict:
         raise ValueError(resultado.get("message") or
                           "el extractor no devolvió datos")
     primero = resultado["items"][0]
-    doc = str(primero.get("Documento") or "").lower()
-    tipo = "boleta" if "boleta de honorario" in doc else "factura"
-    return {"tipo": tipo, "fecha": primero.get("Fecha Emision")}
+    return {"tipo": _tipo_de_documento(primero.get("Documento")),
+            "fecha": primero.get("Fecha Emision")}
 
 
 async def job_drive_entrada(context):

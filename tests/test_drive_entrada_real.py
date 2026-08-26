@@ -11,8 +11,13 @@ def test_una_factura_va_al_anio_de_su_emision():
 
 
 def test_una_boleta_de_honorarios_va_a_su_carpeta():
-    assert carpeta_para({"tipo": "boleta", "fecha": "2026-08-25"}) == \
+    assert carpeta_para({"tipo": "honorarios", "fecha": "2026-08-25"}) == \
         "Boletas Honorarios"
+
+
+def test_una_boleta_de_compra_va_a_la_suya():
+    """Decisión del dueño 26-ago: aparte de las facturas."""
+    assert carpeta_para({"tipo": "boleta", "fecha": "2026-08-25"}) == "Boletas"
 
 
 def test_una_guia_va_a_guias():
