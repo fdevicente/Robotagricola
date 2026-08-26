@@ -34,7 +34,9 @@ def cargar_credenciales(token_path: str = None, client_secret_path: str = None):
         raise FaltaAutorizacion(
             "Falta autorizar el Google Drive del robot.\n"
             "Corre una vez, desde la carpeta Robot:\n"
-            "  %LOCALAPPDATA%\Python\bin\python3.11.exe "
+            # cadena CRUDA: sin la r, el \b de "bin" es un retroceso y el
+            # mensaje sale como "%LOCALAPPDATA%\Pythonin\python3.11.exe"
+            r"  %LOCALAPPDATA%\Python\bin\python3.11.exe "
             "scripts/autorizar_drive.py\n"
             "Se abre el navegador, aceptas la advertencia de app no verificada "
             "y queda listo.")
