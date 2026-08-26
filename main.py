@@ -130,6 +130,7 @@ COMANDOS_MENU = [
     ("deposito", "Depositar en caja chica"),
     ("pagado", "Registrar el pago de una factura"),
     ("reporte", "Reporte diario, semanal o mensual"),
+    ("drive", "Ver y reintentar las subidas a Drive"),
     ("cancelar", "Cancelar lo que se está haciendo"),
     ("ayuda", "Ver todo lo que puedo hacer"),
 ]
@@ -365,6 +366,11 @@ def main():
     app.add_handler(CommandHandler("vacaciones", cmd_vacaciones))
     app.add_handler(CommandHandler("vencimientos", cmd_vencimientos))
     app.add_handler(CommandHandler("agregar_trabajador", cmd_agregar_trabajador))
+    # Google Drive: ver cola y reintentar lo rendido
+    from handlers.drive_jobs import cmd_drive, cb_drive_reintentar
+    app.add_handler(CommandHandler("drive", cmd_drive))
+    app.add_handler(CallbackQueryHandler(cb_drive_reintentar,
+                                          pattern="^drive_reintentar$"))
     # Mensajes
     app.add_handler(MessageHandler(filters.Document.ALL,            handle_document))
     app.add_handler(MessageHandler(filters.PHOTO,                   handle_photo))
@@ -454,6 +460,11 @@ def main():
     # Sin esto, un fin de semana sin mensajes se reportaba como "62h apagado".
     app.job_queue.run_repeating(job_latido, interval=300, first=10,
                                 name="latido")
+    # Vaciar la cola de subidas a Drive cada 10 min. Es barato: si la cola
+    # está vacía, ni siquiera se autentica.
+    from handlers.drive_jobs import job_drive_cola
+    app.job_queue.run_repeating(job_drive_cola, interval=600, first=60,
+                                name="drive_cola")
     # Chequeo semanal del Excel de bodega vs Master: LUNES 08:30 (avisa solo si
     # NO calza). ⚠️ Mismo caso que el resumen: estuvo cayendo en DOMINGO por el
     # days=(0,) heredado de PTB < 20. Corregido 2026-08-24.
