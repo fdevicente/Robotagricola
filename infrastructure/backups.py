@@ -5,8 +5,17 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
-def backup_master(reason: str, excel_path=None, backup_base=None):
-    """Copia Master a Dropbox: current.xlsx + snapshot con timestamp."""
+def backup_master(reason: str, excel_path=None, backup_base=None,
+                   cola_path=None):
+    """Copia Master a Dropbox: current.xlsx + snapshot con timestamp.
+
+    `cola_path` existe para las PRUEBAS. Sin él, un test que pasa `excel_path` y
+    `backup_base` propios igual encolaba en la cola de PRODUCCIÓN, porque el
+    encolado leía la ruta de config. Cada corrida de la suite dejaba basura ahí
+    apuntando a carpetas temporales de pytest ya borradas. Es el mismo patrón
+    que una vez destruyó el Master real: confiar en un default dentro de algo
+    que el test creía haber aislado.
+    """
     if excel_path is None or backup_base is None:
         from config import EXCEL_PATH, DROPBOX_BACKUP_PATH
         excel_path = excel_path or EXCEL_PATH
@@ -25,7 +34,7 @@ def backup_master(reason: str, excel_path=None, backup_base=None):
     try:
         from config import DRIVE_COLA_PATH, DRIVE_MAX_INTENTOS
         from modules.drive.cola import Cola
-        Cola(DRIVE_COLA_PATH, DRIVE_MAX_INTENTOS).encolar(
+        Cola(cola_path or DRIVE_COLA_PATH, DRIVE_MAX_INTENTOS).encolar(
             snap_path, "Respaldos/Master", os.path.basename(snap_path))
     except Exception as e:
         logger.warning("No pude encolar el respaldo para Drive: %s", e)

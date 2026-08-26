@@ -12,7 +12,8 @@ def setup_dirs(tmp_path):
 def test_backup_master_creates_current(setup_dirs):
     master, backup_dir = setup_dirs
     from infrastructure.backups import backup_master
-    backup_master(reason="test", excel_path=master, backup_base=backup_dir)
+    backup_master(reason="test", excel_path=master, backup_base=backup_dir,
+                  cola_path=os.path.join(backup_dir, "cola_test.jsonl"))
     current = os.path.join(backup_dir, "Master", "current.xlsx")
     assert os.path.exists(current)
 
@@ -20,7 +21,8 @@ def test_backup_master_creates_current(setup_dirs):
 def test_backup_master_creates_snapshot(setup_dirs):
     master, backup_dir = setup_dirs
     from infrastructure.backups import backup_master
-    backup_master(reason="test", excel_path=master, backup_base=backup_dir)
+    backup_master(reason="test", excel_path=master, backup_base=backup_dir,
+                  cola_path=os.path.join(backup_dir, "cola_test.jsonl"))
     snapshots = os.path.join(backup_dir, "Master", "snapshots")
     files = os.listdir(snapshots)
     assert len(files) == 1
@@ -35,7 +37,8 @@ def test_daily_snapshot_rotates_30_days(setup_dirs):
     for i in range(35):
         f = os.path.join(snapshots_dir, f"2026-04-{i:02d}_18-00.xlsx")
         open(f, 'w').close()
-    backup_master(reason="rotation", excel_path=master, backup_base=backup_dir)
+    backup_master(reason="rotation", excel_path=master, backup_base=backup_dir,
+                  cola_path=os.path.join(backup_dir, "cola_test.jsonl"))
     files = os.listdir(snapshots_dir)
     assert len(files) <= 31
 
