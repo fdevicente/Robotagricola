@@ -62,6 +62,8 @@ COL_CATEGORIA = 17       # Q
 COL_CULTIVO = 18          # R
 COL_CONFIANZA = 19        # S
 COL_CATEGORIZADO_POR = 20 # T
+# Col 21 (U, "N° Archivo") la administra modules/correlativo.py
+COL_ARCHIVO_DRIVE = 22    # V — enlace al PDF subido a Drive (integración Drive)
 
 # Columnas nuevas en Cuenta Banco (despues de col 6)
 COL_BANCO_TIPO = 7             # G
@@ -151,7 +153,8 @@ def ensure_new_columns(path=None):
     # Facturas: cols Q-T
     ws = wb[SHEET_NAME]
     new_fact = {COL_CATEGORIA: "Categoria", COL_CULTIVO: "Cultivo",
-                COL_CONFIANZA: "Confianza", COL_CATEGORIZADO_POR: "Categorizado_por"}
+                COL_CONFIANZA: "Confianza", COL_CATEGORIZADO_POR: "Categorizado_por",
+                COL_ARCHIVO_DRIVE: "Archivo Drive"}
     for col, header in new_fact.items():
         if ws.cell(1, col).value != header:
             ws.cell(1, col, header)

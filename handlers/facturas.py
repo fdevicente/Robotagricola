@@ -100,6 +100,32 @@ def _renombrar_archivo(file_path: str, items: list) -> str:
         return file_path
 
 
+def encolar_documento(file_path: str, fecha_emision=None, cola=None,
+                       tipo: str = "factura") -> None:
+    """Encola la subida del documento a Drive. Nunca lanza.
+
+    El archivo ya está guardado en disco cuando esto corre: si encolar falla,
+    se pierde el enlace, no el documento.
+    """
+    import os
+    from datetime import date
+    try:
+        if cola is None:
+            from config import DRIVE_COLA_PATH, DRIVE_MAX_INTENTOS
+            from modules.drive.cola import Cola
+            cola = Cola(DRIVE_COLA_PATH, DRIVE_MAX_INTENTOS)
+        if tipo == "boleta":
+            carpeta = "Boletas Honorarios"
+        else:
+            anio = str(fecha_emision or "")[:4]
+            if not anio.isdigit():
+                anio = str(date.today().year)
+            carpeta = "Facturas Recibidas/%s" % anio
+        cola.encolar(file_path, carpeta, os.path.basename(file_path))
+    except Exception as e:
+        logger.warning("No pude encolar %s para Drive: %s", file_path, e)
+
+
 def _registrar_correccion(item: dict, campo: str, valor_original, valor_nuevo):
     """Guarda la corrección del usuario para aprendizaje futuro."""
     try:
@@ -518,6 +544,9 @@ async def _process_and_reply(update, context, status_msg, file_path, ud=None, pr
         return
 
     file_path = _renombrar_archivo(file_path, items)
+    encolar_documento(file_path,
+                      fecha_emision=(items[0].get("Fecha Emision")
+                                      if items else None))
     ud["pending_items"] = items
     ud["pending_file_path"] = file_path
     ud["editing_field"] = None
