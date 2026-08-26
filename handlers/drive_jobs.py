@@ -114,6 +114,66 @@ async def job_drive_cola(context):
                     parse_mode="Markdown")
 
 
+def _extraer(ruta_local: str) -> dict:
+    """Llama al extractor real (Claude/Ollama) y arma {tipo, fecha}.
+
+    `process_file` (processors/extractor.py) solo entiende documentos de
+    compra: facturas, notas de crédito/débito, boletas comunes y boletas de
+    honorarios. Solo la boleta de honorarios tiene carpeta propia
+    ("Boletas Honorarios"); todo lo demás que el extractor reconozca se
+    clasifica como "factura" y va por año. Las guías de despacho NO las lee
+    el extractor todavía: quedan en _Entrada/Sin procesar hasta que se
+    amplíe, y eso es esperado, no un bug.
+    """
+    from processors.extractor import process_file
+    resultado = process_file(ruta_local)
+    if resultado.get("status") != "ok" or not resultado.get("items"):
+        raise ValueError(resultado.get("message") or
+                          "el extractor no devolvió datos")
+    primero = resultado["items"][0]
+    doc = str(primero.get("Documento") or "").lower()
+    tipo = "boleta" if "boleta de honorario" in doc else "factura"
+    return {"tipo": tipo, "fecha": primero.get("Fecha Emision")}
+
+
+async def job_drive_entrada(context):
+    """Revisa la carpeta _Entrada de Drive cada 15 min."""
+    import asyncio
+    import os
+    import tempfile
+
+    from config import DRIVE_RAIZ
+    from handlers.drive_entrada import carpeta_para, revisar_entrada
+    from modules.drive.auth import FaltaAutorizacion
+    from modules.drive.carpetas import Carpetas
+    from modules.drive.cliente import DriveCliente
+
+    try:
+        drive = await asyncio.to_thread(DriveCliente)
+    except FaltaAutorizacion:
+        return                       # job_drive_cola ya avisa por esto
+
+    raiz = await asyncio.to_thread(_raiz_id, drive, DRIVE_RAIZ)
+    carpetas = Carpetas(drive, raiz)
+
+    def procesar(archivo):
+        with tempfile.TemporaryDirectory() as tmp:
+            local = os.path.join(tmp, archivo["nombre"])
+            drive.descargar(archivo["id"], local)
+            return carpeta_para(_extraer(local))
+
+    res = await asyncio.to_thread(revisar_entrada, drive, carpetas, procesar)
+    if res["sin_procesar"]:
+        chat_id = (context.bot_data.get("owner_chat_id")
+                   or context.bot_data.get("banco_chat_id") or TELEGRAM_CHAT_ID)
+        if chat_id:
+            await context.bot.send_message(
+                chat_id=int(chat_id),
+                text=("📂 %d archivo(s) de _Entrada no los supe leer. "
+                      "Quedaron en _Entrada/Sin procesar."
+                      % res["sin_procesar"]))
+
+
 async def cmd_drive(update, context):
     """Muestra cuántas subidas hay pendientes y rendidas, con opción a reintentar."""
     cola = Cola(DRIVE_COLA_PATH, max_intentos=DRIVE_MAX_INTENTOS)

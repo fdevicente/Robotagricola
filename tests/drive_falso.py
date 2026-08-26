@@ -50,3 +50,8 @@ class DriveFalso:
     def cuota(self):
         usado, total = self._cuota
         return {"usado": usado, "total": total}
+
+    def descargar(self, file_id, ruta_local):
+        with open(ruta_local, "w", encoding="utf-8") as fh:
+            fh.write("contenido falso")
+        return ruta_local

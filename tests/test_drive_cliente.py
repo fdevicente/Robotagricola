@@ -9,7 +9,7 @@ from modules.drive.cliente import DriveCliente
 from tests.drive_falso import DriveFalso
 
 METODOS = ["subir", "crear_carpeta", "buscar_carpeta", "buscar_archivo",
-           "listar", "mover", "cuota"]
+           "listar", "mover", "cuota", "descargar"]
 
 
 def test_el_falso_implementa_todos_los_metodos_del_real():

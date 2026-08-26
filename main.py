@@ -465,6 +465,10 @@ def main():
     from handlers.drive_jobs import job_drive_cola
     app.job_queue.run_repeating(job_drive_cola, interval=600, first=60,
                                 name="drive_cola")
+    # Revisar _Entrada de Drive cada 15 min: clasifica y mueve lo que llegue.
+    from handlers.drive_jobs import job_drive_entrada
+    app.job_queue.run_repeating(job_drive_entrada, interval=900, first=120,
+                                name="drive_entrada")
     # Chequeo semanal del Excel de bodega vs Master: LUNES 08:30 (avisa solo si
     # NO calza). ⚠️ Mismo caso que el resumen: estuvo cayendo en DOMINGO por el
     # days=(0,) heredado de PTB < 20. Corregido 2026-08-24.

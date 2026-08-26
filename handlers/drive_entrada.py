@@ -12,6 +12,26 @@ ENTRADA = "_Entrada"
 SIN_PROCESAR = "_Entrada/Sin procesar"
 
 
+def carpeta_para(datos: dict) -> str:
+    """Carpeta destino según el tipo. Lanza si no lo reconoce.
+
+    Lanzar es deliberado: `revisar_entrada` manda a 'Sin procesar' lo que no
+    supo clasificar, en vez de adivinar una carpeta.
+    """
+    from datetime import date
+    tipo = str(datos.get("tipo") or "").lower()
+    if tipo == "boleta":
+        return "Boletas Honorarios"
+    if tipo == "guia":
+        return "Guías de Despacho"
+    if tipo == "factura":
+        anio = str(datos.get("fecha") or "")[:4]
+        if not anio.isdigit():
+            anio = str(date.today().year)
+        return "Facturas Recibidas/%s" % anio
+    raise ValueError("tipo de documento desconocido: %r" % tipo)
+
+
 def revisar_entrada(drive, carpetas, procesar) -> dict:
     """`procesar(archivo)` devuelve la carpeta destino, o lanza si no pudo.
 

@@ -66,3 +66,13 @@ class DriveCliente:
         q = r["storageQuota"]
         return {"usado": int(q.get("usage", 0)),
                 "total": int(q.get("limit", 0)) or None}
+
+    def descargar(self, file_id, ruta_local):
+        from googleapiclient.http import MediaIoBaseDownload
+        pedido = self._s.files().get_media(fileId=file_id)
+        with open(ruta_local, "wb") as fh:
+            bajada = MediaIoBaseDownload(fh, pedido)
+            listo = False
+            while not listo:
+                _, listo = bajada.next_chunk()
+        return ruta_local
