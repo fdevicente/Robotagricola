@@ -54,6 +54,22 @@ for _d in [GUIAS_DIR, DOCUMENTOS_DIR, REPORTES_DIR,
            os.path.join(DROPBOX_BACKUP_PATH, "Robot")]:
     os.makedirs(_d, exist_ok=True)
 
+# ── Google Drive ────────────────────────────────────────────────────────────
+# Credenciales OAuth de la cuenta dedicada del robot. NUNCA al repositorio.
+_ROBOT_DIR = os.path.dirname(os.path.abspath(__file__))
+DRIVE_CLIENT_SECRET = os.getenv("DRIVE_CLIENT_SECRET",
+                                 os.path.join(_ROBOT_DIR, ".drive_client_secret.json"))
+DRIVE_TOKEN_PATH = os.getenv("DRIVE_TOKEN_PATH",
+                              os.path.join(_ROBOT_DIR, ".drive_token.json"))
+# Carpeta raíz en Drive. Se resuelve por nombre la primera vez y se cachea.
+DRIVE_RAIZ = os.getenv("DRIVE_RAIZ", "Agrícola Santa Elisa")
+# Cola de subidas pendientes (se persiste: el watchdog reinicia el bot seguido)
+DRIVE_COLA_PATH = os.getenv("DRIVE_COLA_PATH",
+                             os.path.join(_ROBOT_DIR, "files", "drive_cola.jsonl"))
+DRIVE_MAX_INTENTOS = int(os.getenv("DRIVE_MAX_INTENTOS", "5"))
+# Avisar cuando el Drive pase de este porcentaje de uso
+DRIVE_UMBRAL_AVISO = float(os.getenv("DRIVE_UMBRAL_AVISO", "0.80"))
+
 CASH_FLOW_CONFIG = {
     'saldo_minimo_pct': 0.10,
     'umbral_alerta_cat_pct': 0.90,

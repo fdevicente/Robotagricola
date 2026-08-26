@@ -36,3 +36,7 @@ Claude/
 
 # Dependencias vendorizadas de un script viejo
 node_modules/
+
+# Credenciales de Google Drive
+.drive_client_secret.json
+.drive_token.json

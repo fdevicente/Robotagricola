@@ -5,3 +5,5 @@ openpyxl
 schedule
 openai
 pymupdf
+google-api-python-client>=2.140
+google-auth-oauthlib>=1.2
