@@ -40,9 +40,23 @@ class DriveFalso:
         return None
 
     def listar(self, carpeta_id):
-        return [{"id": fid, "nombre": a["nombre"]}
-                for fid, a in self.archivos.items()
-                if a["carpeta_id"] == carpeta_id]
+        """Solo documentos: las subcarpetas NO son documentos.
+
+        En Drive real una carpeta ES un archivo (con mimeType de carpeta) y la
+        consulta `'<id>' in parents` la devuelve igual. Este falso antes solo
+        miraba `self.archivos`, así que jamás devolvía subcarpetas y ocultaba el
+        bug: en producción `_Entrada/Sin procesar` aparecía como documento, el
+        robot intentaba procesarla y después moverla dentro de sí misma.
+        Ahora mira ambos y filtra, igual que el cliente real.
+        """
+        candidatos = [{"id": fid, "nombre": a["nombre"], "es_carpeta": False}
+                      for fid, a in self.archivos.items()
+                      if a["carpeta_id"] == carpeta_id]
+        candidatos += [{"id": cid, "nombre": c["nombre"], "es_carpeta": True}
+                       for cid, c in self.carpetas.items()
+                       if c and c.get("padre") == carpeta_id]
+        return [{"id": x["id"], "nombre": x["nombre"]}
+                for x in candidatos if not x["es_carpeta"]]
 
     def mover(self, file_id, carpeta_destino_id):
         self.archivos[file_id]["carpeta_id"] = carpeta_destino_id

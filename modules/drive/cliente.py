@@ -49,7 +49,16 @@ class DriveCliente:
         return f[0]["id"] if f else None
 
     def listar(self, carpeta_id):
-        q = "'%s' in parents and trashed = false" % carpeta_id
+        """Solo documentos: EXCLUYE las subcarpetas.
+
+        En Drive una carpeta es un archivo más, así que sin este filtro
+        `_Entrada/Sin procesar` salía listada como si fuera un documento: el
+        robot intentaba descargarla, fallaba, y después la movía dentro de sí
+        misma (HttpError 400 con addParents == fileId). Pasó en producción el
+        26-ago-2026, cada 15 minutos.
+        """
+        q = ("'%s' in parents and trashed = false and mimeType != '%s'"
+             % (carpeta_id, CARPETA_MIME))
         r = self._s.files().list(q=q, fields="files(id,name)",
                                  pageSize=1000).execute()
         return [{"id": a["id"], "nombre": a["name"]} for a in r.get("files") or []]
