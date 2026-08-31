@@ -6,6 +6,13 @@ ser el único lugar donde vivió un documento.
 """
 import logging
 import os
+import re
+
+# `PROVEEDOR_NRO_20260826_130058` -> se le saca el sello de fecha y hora
+_SELLO = re.compile(r"^(.*?)_\d{8}_\d{6}$")
+# ...y de lo que queda, el numero es la ultima tira de digitos tras un '_'
+_PROV_Y_NUMERO = re.compile(r"^(.+)_(\d+)$")
+_TIENE_LETRA = re.compile(r"[^\W\d_]", re.UNICODE)
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +52,29 @@ def procesar_cola(cola, drive, carpetas, excel_path: str = None) -> dict:
     return {"subidos": subidos, "fallidos": fallidos}
 
 
+def _partes_del_nombre(nombre: str):
+    """(proveedor, número) del nombre del archivo, o None si no es una factura.
+
+    Los nombres los arma `handlers.facturas._renombrar_archivo` como
+    `PROVEEDOR_NRO.ext`, y cuando ese nombre ya existía le agrega un sello de
+    fecha y hora: `PROVEEDOR_NRO_20260826_130058.ext`. Hay que sacarle el sello
+    ANTES de buscar el número, porque si no el `130058` se hace pasar por el
+    número de factura — así se perdieron 124 enlaces.
+
+    Exige que haya algo delante del número: `20260826_130058.jpg` sin proveedor
+    no identifica ninguna factura, y los respaldos del Master
+    (`2026-08-26_16-40.xlsx`) no tienen que colar.
+    """
+    tallo = os.path.splitext(nombre)[0]
+    sello = _SELLO.match(tallo)
+    if sello:
+        tallo = sello.group(1)
+    m = _PROV_Y_NUMERO.match(tallo)
+    if not m or not _TIENE_LETRA.search(m.group(1)):
+        return None                  # un proveedor tiene letras; una fecha no
+    return m.group(1), m.group(2)
+
+
 def _enlazar(item: dict, file_id: str, excel_path: str = None) -> None:
     """Deja el enlace en la fila de la factura. Nunca lanza.
 
@@ -54,14 +84,18 @@ def _enlazar(item: dict, file_id: str, excel_path: str = None) -> None:
     (None), se usa el MASTER real de config.EXCEL_PATH — el comportamiento
     de producción.
     """
-    import re
     try:
-        m = re.search(r"_(\d+)\.[A-Za-z0-9]+$", item["nombre"])
-        if not m:
+        partes = _partes_del_nombre(item["nombre"])
+        if partes is None:
             return                       # respaldos y otros no llevan enlace
+        proveedor, numero = partes
         if excel_path is None:
             from config import EXCEL_PATH as excel_path
         from modules.drive.enlaces import guardar_enlace
-        guardar_enlace(excel_path, m.group(1), file_id)
+        if not guardar_enlace(excel_path, numero, file_id, proveedor=proveedor):
+            # Sin fila que calce no hay nada que escribir, pero que se vea:
+            # es la señal de que el proveedor del Master está escrito distinto.
+            logger.info("Drive: %s subido, sin fila para %s Nº%s",
+                        item["nombre"], proveedor, numero)
     except Exception as e:
         logger.warning("No pude enlazar %s: %s", item["nombre"], e)
