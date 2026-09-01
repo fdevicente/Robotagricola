@@ -166,16 +166,27 @@ async def job_drive_entrada(context):
     except FaltaAutorizacion:
         return                       # job_drive_cola ya avisa por esto
 
-    raiz = await asyncio.to_thread(_raiz_id, drive, DRIVE_RAIZ)
-    carpetas = Carpetas(drive, raiz)
-
     def procesar(archivo):
         with tempfile.TemporaryDirectory() as tmp:
             local = os.path.join(tmp, archivo["nombre"])
             drive.descargar(archivo["id"], local)
             return carpeta_para(_extraer(local))
 
-    res = await asyncio.to_thread(revisar_entrada, drive, carpetas, procesar)
+    # Un corte de red NO es un bug: migrando los 960 documentos este mismo
+    # timeout apareció 109 veces. El job corre cada 15 min, así que perder una
+    # pasada no cuesta nada — pero dejarlo propagar llenaba el log de
+    # excepciones no atrapadas. Solo se perdona la familia de OSError
+    # (TimeoutError, ConnectionError, socket y ssl): cualquier otra cosa sube
+    # al error handler, que para eso está.
+    try:
+        raiz = await asyncio.to_thread(_raiz_id, drive, DRIVE_RAIZ)
+        carpetas = Carpetas(drive, raiz)
+        res = await asyncio.to_thread(revisar_entrada, drive, carpetas,
+                                      procesar)
+    except OSError as e:
+        logger.warning("Drive: la red falló revisando _Entrada (%s). "
+                       "Se reintenta en la próxima pasada.", e)
+        return
     if res["sin_procesar"]:
         chat_id = (context.bot_data.get("owner_chat_id")
                    or context.bot_data.get("banco_chat_id") or TELEGRAM_CHAT_ID)

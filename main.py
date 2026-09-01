@@ -316,6 +316,14 @@ def main():
            .post_init(_post_init)
            .read_timeout(120).write_timeout(120).connect_timeout(120).pool_timeout(120).build())
 
+    # Sin esto, PTB escribe "No error handlers are registered" y la excepción
+    # muere en el log: NADIE se entera. Pasó el 1-sep-2026 con un timeout de
+    # Drive, y es lo más probable detrás del parte de Juan que se perdió en
+    # silencio el 24-ago. Va primero para que cubra todo lo que se registre
+    # después.
+    from handlers.errores import manejar_error
+    app.add_error_handler(manejar_error)
+
     # Tracker de actividad: corre PRIMERO para cada update (group=-1) y registra
     # el último mensaje procesado (heartbeat persistente).
     app.add_handler(TypeHandler(Update, _track_activity), group=-1)
