@@ -29,8 +29,8 @@ def guardar_enlace(excel_path: str, numero_factura: str, file_id: str,
         for f in range(2, ws.max_row + 1):
             if _normalizar(ws.cell(f, COL_NUMERO).value) != objetivo:
                 continue
-            if buscado is not None and \
-                    _clave_proveedor(ws.cell(f, COL_PROVEEDOR).value) != buscado:
+            if buscado is not None and not _mismo_proveedor(
+                    buscado, _clave_proveedor(ws.cell(f, COL_PROVEEDOR).value)):
                 continue
             calzaron += 1
             if ws.cell(f, COL_DRIVE).value:
@@ -70,3 +70,34 @@ def _clave_proveedor(valor) -> str:
     """
     s = str(valor if valor is not None else "")
     return re.sub(r"[\s_]+", " ", s).strip().casefold()
+
+
+# El nombre del ARCHIVO queda congelado el día que se sacó la foto; el del
+# Master se corrige después. Al unificar "FERRETERIAINDUTRIAL TALCA LIMITADA"
+# se arreglaron 7 archivos y se rompieron 8, que se llamaban con la grafía
+# vieja. Por eso las dos grafías tienen que resolver a la misma clave.
+# Cada par está comprobado con el RUT o con la factura, no por parecido.
+_ALIAS = {
+    "ferreteriaindutrial talca limitada": "ferreteria industrial talca limitada",
+    "ferreteria industrial paghita spa": "ferreteria industrial pachita spa",
+    "servicios y arriendos rotortec spa": "rotortec",
+    "irrifer": "irrifor",
+    "salina y fabres": "salinas y fabres",
+}
+
+# `handlers.facturas._limpiar` corta el nombre a 60 caracteres, así que un
+# proveedor de nombre largo queda cortado en el archivo y entero en el Master.
+_LARGO_MAXIMO = 60
+
+
+def _mismo_proveedor(uno: str, otro: str) -> bool:
+    """Si las dos claves son el mismo proveedor escrito distinto."""
+    uno, otro = _ALIAS.get(uno, uno), _ALIAS.get(otro, otro)
+    if uno == otro:
+        return True
+    # Un nombre de exactamente 60 viene cortado: puede ser el principio del
+    # otro. Un prefijo más corto NO vale — ahí sí serían proveedores distintos.
+    for corto, largo in ((uno, otro), (otro, uno)):
+        if len(corto) == _LARGO_MAXIMO and largo.startswith(corto):
+            return True
+    return False
