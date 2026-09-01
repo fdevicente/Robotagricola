@@ -5,6 +5,7 @@ Nace del 24-ago-2026: un parte de horómetro de Juan se perdió en silencio y no
 se pudo diagnosticar porque el texto original no quedaba en ninguna parte.
 """
 import json
+import os
 import types
 
 import pytest
@@ -24,20 +25,32 @@ def _update(texto=None, uid=8840816610, nombre="Juan Parada", chat=8840816610,
         effective_chat=types.SimpleNamespace(id=chat))
 
 
+def _mes_actual():
+    """El mes con que el módulo nombra el archivo AHORA, en UTC.
+
+    Estaba escrito "2026-08" a mano en seis lugares. Pero el respaldo archiva
+    por hora de RECEPCIÓN (UTC), no por la fecha del mensaje, así que estos
+    tests se caían solos la última noche de cada mes: desde las 20:00 en Chile
+    en UTC ya es el mes siguiente y `leer_mes("2026-08")` devolvía vacío.
+    Pasó el 31-ago-2026 a las 20:14, y habría vuelto a pasar todos los meses.
+    """
+    return os.path.splitext(os.path.basename(ruta_del_mes()))[0]
+
+
 PARTE = ("Tractor jhon deere 5085\nHorometro inicio 3263\n"
          "Horometro termino 3265\nTotal horas 2\nSector 1")
 
 
 def test_guarda_el_texto_tal_cual(tmp_path):
     guardar_update(_update(PARTE), base=str(tmp_path))
-    filas = leer_mes("2026-08", base=str(tmp_path))
+    filas = leer_mes(_mes_actual(), base=str(tmp_path))
     assert len(filas) == 1
     assert filas[0]["text"] == PARTE          # sin recortar ni interpretar
 
 
 def test_guarda_quien_y_cuando(tmp_path):
     guardar_update(_update("hola"), base=str(tmp_path))
-    f = leer_mes("2026-08", base=str(tmp_path))[0]
+    f = leer_mes(_mes_actual(), base=str(tmp_path))[0]
     assert f["user_id"] == 8840816610
     assert f["nombre"] == "Juan Parada"
     assert f["chat_id"] == 8840816610
@@ -48,7 +61,7 @@ def test_guarda_quien_y_cuando(tmp_path):
 def test_es_append_no_pisa(tmp_path):
     for i in range(3):
         guardar_update(_update("msg %d" % i, update_id=i), base=str(tmp_path))
-    filas = leer_mes("2026-08", base=str(tmp_path))
+    filas = leer_mes(_mes_actual(), base=str(tmp_path))
     assert [f["text"] for f in filas] == ["msg 0", "msg 1", "msg 2"]
 
 
@@ -66,7 +79,7 @@ def test_guarda_documentos_sin_el_binario(tmp_path):
     doc = types.SimpleNamespace(file_name="cartola.xlsx", mime_type="x/xlsx",
                                 file_id="ABC123", file_size=5000)
     guardar_update(_update(caption="la cartola", doc=doc), base=str(tmp_path))
-    f = leer_mes("2026-08", base=str(tmp_path))[0]
+    f = leer_mes(_mes_actual(), base=str(tmp_path))[0]
     assert f["documento"]["file_name"] == "cartola.xlsx"
     assert f["documento"]["file_id"] == "ABC123"
     assert f["caption"] == "la cartola"
@@ -79,7 +92,7 @@ def test_guarda_fotos():
 def test_foto_guarda_file_id(tmp_path):
     foto = [types.SimpleNamespace(file_id="FOTO1")]
     guardar_update(_update(foto=foto), base=str(tmp_path))
-    assert leer_mes("2026-08", base=str(tmp_path))[0]["foto"]["file_id"] == "FOTO1"
+    assert leer_mes(_mes_actual(), base=str(tmp_path))[0]["foto"]["file_id"] == "FOTO1"
 
 
 def test_se_puede_buscar_despues(tmp_path):
@@ -111,7 +124,7 @@ def test_una_linea_corrupta_no_inutiliza_el_resto(tmp_path):
     with open(ruta_del_mes(base=str(tmp_path)), "a", encoding="utf-8") as fh:
         fh.write("{esto no es json}\n")
     guardar_update(_update("otra buena"), base=str(tmp_path))
-    filas = leer_mes("2026-08", base=str(tmp_path))
+    filas = leer_mes(_mes_actual(), base=str(tmp_path))
     assert [f["text"] for f in filas] == ["buena", "otra buena"]
 
 
