@@ -25,19 +25,29 @@ def guardar_enlace(excel_path: str, numero_factura: str, file_id: str,
         ws = wb["Facturas"]
         objetivo = _normalizar(numero_factura)
         buscado = _clave_proveedor(proveedor) if proveedor else None
-        tocadas = 0
+        tocadas = calzaron = 0
         for f in range(2, ws.max_row + 1):
             if _normalizar(ws.cell(f, COL_NUMERO).value) != objetivo:
                 continue
             if buscado is not None and \
                     _clave_proveedor(ws.cell(f, COL_PROVEEDOR).value) != buscado:
                 continue
+            calzaron += 1
             if ws.cell(f, COL_DRIVE).value:
                 continue
             ws.cell(f, COL_DRIVE).value = URL % file_id
             tocadas += 1
         if tocadas:
             wb.save(excel_path)          # ruta EXPLÍCITA siempre
+        else:
+            # Por qué no se escribió: son dos cosas muy distintas y el log
+            # tiene que distinguirlas. 'Ya tenía enlace' es lo normal al
+            # reenviar una foto; 'sin fila' es la factura que falta cargar.
+            logger.info(
+                "%s Nº%s: %s", proveedor or "(sin proveedor)",
+                numero_factura,
+                "la fila ya tenía enlace" if calzaron else
+                "sin fila que calce en el Master")
         return tocadas > 0
     finally:
         wb.close()

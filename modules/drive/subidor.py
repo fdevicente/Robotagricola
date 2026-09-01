@@ -92,10 +92,8 @@ def _enlazar(item: dict, file_id: str, excel_path: str = None) -> None:
         if excel_path is None:
             from config import EXCEL_PATH as excel_path
         from modules.drive.enlaces import guardar_enlace
-        if not guardar_enlace(excel_path, numero, file_id, proveedor=proveedor):
-            # Sin fila que calce no hay nada que escribir, pero que se vea:
-            # es la señal de que el proveedor del Master está escrito distinto.
-            logger.info("Drive: %s subido, sin fila para %s Nº%s",
-                        item["nombre"], proveedor, numero)
+        # Si no escribe, el propio guardar_enlace explica por qué: distingue
+        # "la fila ya tenía enlace" de "no hay fila", que desde acá no se sabe.
+        guardar_enlace(excel_path, numero, file_id, proveedor=proveedor)
     except Exception as e:
         logger.warning("No pude enlazar %s: %s", item["nombre"], e)
