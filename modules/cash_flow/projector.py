@@ -193,11 +193,14 @@ def load_expected_ingresos(excel_path: str | None = None) -> list:
     Pacific paga en USD por COMEX y no lo agrega. Las filas `recibido` no se tocan
     porque ya guardan el efectivo real, IVA incluido.
     """
-    from config import CASH_FLOW_CONFIG
-    usd_clp = CASH_FLOW_CONFIG.get("usd_clp_estimado", 1000)
+    from modules.cuentas import tipo_cambio
 
     excel_path = excel_path or EXCEL_PATH
     wb = load_workbook(excel_path, read_only=True, data_only=True)
+    # MISMA fuente que usa la caja: la hoja Config manda y config.py es el
+    # respaldo. Leer CASH_FLOW_CONFIG directo era lo que permitia que el
+    # dashboard mostrara la caja a un tipo de cambio y los ingresos a otro.
+    usd_clp = tipo_cambio(wb)
     ws = wb[COSECHAS_SHEET]
     ingresos = []
     for row in ws.iter_rows(min_row=2, max_col=17, values_only=True):

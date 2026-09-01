@@ -58,8 +58,15 @@ def _ultimo_saldo(ws):
     return saldo, fecha
 
 
-def _tipo_cambio(wb):
-    """CLP por USD. Manda la hoja Config; si no está, el valor de config.py."""
+def tipo_cambio(wb):
+    """CLP por USD. Manda la hoja Config; si no está, el valor de config.py.
+
+    ÚNICA fuente del tipo de cambio para todo el bot. Vivía en dos lados que
+    podían separarse: la caja leía esta hoja (pega al toque) y el proyector
+    leía `CASH_FLOW_CONFIG` de config.py (que solo se relee al reiniciar). Con
+    eso, editar la hoja dejaba el dashboard mostrando la caja a un tipo de
+    cambio y los ingresos proyectados a otro, sin que nada avisara.
+    """
     if CONFIG_SHEET in wb.sheetnames:
         for row in wb[CONFIG_SHEET].iter_rows(min_row=2, max_col=2, values_only=True):
             if row and str(row[0] or "").strip() == "usd_clp_estimado":
@@ -82,7 +89,7 @@ def caja_total(excel_path: str | None = None) -> dict:
                           if BANCO_SHEET in wb.sheetnames else (0.0, None))
         usd, fecha_usd = (_ultimo_saldo(wb[DOLAR_SHEET])
                           if DOLAR_SHEET in wb.sheetnames else (0.0, None))
-        tc = _tipo_cambio(wb)
+        tc = tipo_cambio(wb)
     finally:
         wb.close()
 
