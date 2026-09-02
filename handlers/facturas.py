@@ -126,6 +126,51 @@ def encolar_documento(file_path: str, fecha_emision=None, cola=None,
         logger.warning("No pude encolar %s para Drive: %s", file_path, e)
 
 
+def _factor_iva(items) -> float:
+    """1.19, o 1.0 si el documento no lleva IVA."""
+    doc = str((items[0] if items else {}).get("Documento") or "").lower()
+    sin_iva = any(k in doc for k in ("exenta", "exento", "no afecta",
+                                      "no afecto", "boleta de honorario"))
+    return 1.0 if sin_iva else 1.19
+
+
+def _ajustar_al_total(items, total: float, iva_factor: float = None) -> None:
+    """Acomoda los ítems para que sumen `total`. La SUMATORIA INVERSA.
+
+    Se usa cuando el dueño fijó el Total Factura a mano: a partir de ahí ese
+    número es la verdad y lo que se mueve es el resto. Antes pasaba al revés —
+    el total se recalculaba en cada edición y pisaba lo que él había puesto.
+
+    El reparto es proporcional a lo que cada ítem pesaba, así que una factura
+    de un solo ítem toma el total entero y una de varios conserva las
+    proporciones. El redondeo se ajusta en el último ítem para que la suma dé
+    exacta y no queden pesos sueltos.
+    """
+    if not items or total <= 0:
+        return
+    if iva_factor is None:
+        iva_factor = _factor_iva(items)
+
+    suma = sum(float(it.get("Monto / TOTAL") or 0) for it in items)
+    if suma > 0:
+        factor = total / suma
+        for it in items:
+            it["Monto / TOTAL"] = round(float(it.get("Monto / TOTAL") or 0) * factor)
+    else:
+        items[0]["Monto / TOTAL"] = round(total)
+
+    dif = round(total) - round(sum(float(it.get("Monto / TOTAL") or 0) for it in items))
+    if dif:
+        items[-1]["Monto / TOTAL"] = round(float(items[-1].get("Monto / TOTAL") or 0) + dif)
+
+    for it in items:
+        mt = float(it.get("Monto / TOTAL") or 0)
+        qty = float(it.get("Cantidad") or 1) or 1
+        imp = float(it.get("Impuesto Especifico") or 0)
+        it["Valor unitario"] = round(((mt - imp) / iva_factor) / qty, 2)
+        it["Total Factura"] = round(total)
+
+
 def _registrar_correccion(item: dict, campo: str, valor_original, valor_nuevo):
     """Guarda la corrección del usuario para aprendizaje futuro."""
     try:
@@ -890,10 +935,16 @@ async def cb_del_item_confirm(update, context):
     if 0 <= idx < len(items):
         items.pop(idx)
         context.user_data["pending_items"] = items
-        nuevo_tf = round(sum(float(it.get("Monto / TOTAL") or 0) for it in items))
-        if nuevo_tf > 0:
-            for it in items:
-                it["Total Factura"] = nuevo_tf
+        fijado = context.user_data.get("total_override")
+        if fijado and items:
+            # Si el total está fijado a mano, borrar un ítem tampoco lo mueve:
+            # los que quedan se reparten ese mismo total.
+            _ajustar_al_total(items, float(fijado))
+        else:
+            nuevo_tf = round(sum(float(it.get("Monto / TOTAL") or 0) for it in items))
+            if nuevo_tf > 0:
+                for it in items:
+                    it["Total Factura"] = nuevo_tf
     await _show_preview(query, context)
 
 
@@ -1015,10 +1066,18 @@ async def handle_text_edit_factura(update, context) -> bool:
                 q = float(it.get("Cantidad") or 1)
                 imp = float(it.get("Impuesto Especifico") or 0)
                 it["Monto / TOTAL"] = round(u * q * iva_factor0 + imp)
-        nuevo_tf = round(sum(float(it.get("Monto / TOTAL") or 0) for it in items))
-        if nuevo_tf > 0:
-            for it in items:
-                it["Total Factura"] = nuevo_tf
+        fijado = context.user_data.get("total_override")
+        if fijado:
+            # El dueño ya fijó el total: ESE valor manda y los ítems se
+            # acomodan a él. Antes se recalculaba siempre, así que la edición
+            # siguiente pisaba lo que él había fijado — la marca existía desde
+            # el principio y nadie la leía.
+            _ajustar_al_total(items, float(fijado), iva_factor0)
+        else:
+            nuevo_tf = round(sum(float(it.get("Monto / TOTAL") or 0) for it in items))
+            if nuevo_tf > 0:
+                for it in items:
+                    it["Total Factura"] = nuevo_tf
 
     context.user_data["editing_field"] = None
     context.user_data["editing_item_idx"] = None
