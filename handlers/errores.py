@@ -27,6 +27,28 @@ VENTANA_AVISO = 6 * 60 * 60
 
 _PREFIJO = "_error_visto_"
 
+# Cuántos cortes de red seguidos hacen falta para que valga la pena avisar.
+# Sueltos son ruido: medido en bot.log, 1 o 2 por día durante meses y ninguno
+# requirió que nadie hiciera nada — PTB reintenta y sigue. Pero una racha sí
+# significa que el bot dejó de recibir mensajes, y eso hay que saberlo.
+UMBRAL_RACHA_RED = 5
+_CONTADOR_RED = "_cortes_de_red"
+_AVISADA_RACHA = "_racha_red_avisada"
+
+
+def _es_corte_de_red(error) -> bool:
+    """Un tropiezo del transporte con Telegram, no un bug del bot.
+
+    ⚠️ `BadRequest` HEREDA de `NetworkError` en PTB, así que no se puede usar
+    isinstance(error, NetworkError) sin más: una petición mal armada es un bug
+    y tiene que avisar. Solo `TimedOut` y `NetworkError` exacto son transporte.
+    """
+    try:
+        from telegram.error import NetworkError, TimedOut
+    except ImportError:
+        return False
+    return isinstance(error, TimedOut) or type(error) is NetworkError
+
 
 def _identidad(error) -> str:
     """Qué error es y DÓNDE se produjo.
@@ -84,6 +106,30 @@ async def manejar_error(update, context) -> None:
         logger.error("Excepción no atrapada: %s\n%s", error,
                      "".join(traceback.format_exception(
                          type(error), error, error.__traceback__)))
+
+        if _es_corte_de_red(error):
+            # Se cuenta y se calla. Solo una racha llega a molestar al dueño.
+            datos = context.bot_data
+            n = int(datos.get(_CONTADOR_RED) or 0) + 1
+            datos[_CONTADOR_RED] = n
+            logger.info("Corte de red con Telegram (%s). Van %d.",
+                        type(error).__name__, n)
+            if n < UMBRAL_RACHA_RED or datos.get(_AVISADA_RACHA):
+                return
+            datos[_AVISADA_RACHA] = True
+            chat = (datos.get("owner_chat_id") or datos.get("banco_chat_id"))
+            if not chat:
+                from config import TELEGRAM_CHAT_ID
+                chat = TELEGRAM_CHAT_ID
+            if chat:
+                await context.bot.send_message(
+                    chat_id=int(chat),
+                    text=("📡 La conexión con Telegram se está cortando seguido"
+                          " (%d veces).\n\n"
+                          "El bot reintenta solo, pero si no te llegan"
+                          " respuestas puede ser esto. Revisa la conexión del"
+                          " computador." % n))
+            return
 
         if _ya_se_aviso(context.bot_data, _identidad(error)):
             return                          # ya avisado, no spamear
