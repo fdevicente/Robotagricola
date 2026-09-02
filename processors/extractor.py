@@ -956,18 +956,30 @@ def _limpiar_items(items: list) -> list:
                     if isinstance(val, (int, float)):
                         # Totales siempre enteros (pesos chilenos sin centavos)
                         if field in CAMPOS_TOTAL:
-                            fval = float(val)
-                            # CORRECCIÓN: float con exactamente 3 decimales → punto es miles chileno
-                            # Ejemplo: 771.784 → 771784, 42.792 → 42792, 123.225 → 123225
-                            # (En CLP los totales son siempre enteros, nunca tienen centavos)
-                            if not isinstance(val, int):
-                                s = repr(val)
-                                if '.' in s:
-                                    dec = s.split('.')[1].rstrip('0')
-                                    if len(dec) == 3:
-                                        fval = fval * 1000
-                                        logger.info(f"{field}: float 3-dec → ×1000 ({val} → {round(fval)})")
-                            item[field] = round(fval)
+                            # ¿El punto es separador de miles o residuo de ×1,19?
+                            # La FORMA no lo distingue (563.600×1,19 = 670.684,976
+                            # tiene 3 decimales y está perfecto), así que se
+                            # decide contra lo que debería valer según el resto
+                            # de la factura. Ver _elegir_escala.
+                            ref = None
+                            try:
+                                neto = (float(item.get("Valor unitario") or 0)
+                                        * float(item.get("Cantidad") or 1))
+                                if neto > 0:
+                                    doc_l = str(item.get("Documento") or "").lower()
+                                    sin_iva_d = any(k in doc_l for k in (
+                                        "exenta", "exento", "no afecta",
+                                        "no afecto", "boleta de honorario"))
+                                    ref = neto * (1.0 if sin_iva_d else 1.19)
+                                    if field != "Impuesto Especifico":
+                                        ref += float(item.get("Impuesto Especifico") or 0)
+                            except (TypeError, ValueError):
+                                ref = None
+                            nuevo_v = _elegir_escala(val, referencia=ref)
+                            if nuevo_v != round(float(val)):
+                                logger.info("%s: %s → %s (separador de miles)",
+                                            field, val, nuevo_v)
+                            item[field] = nuevo_v
                         else:
                             item[field] = float(val)
                         continue
@@ -1287,3 +1299,30 @@ def sanear_impuesto_especifico(items: list) -> None:
             neto, iva_factor, neto * iva_factor, total, imp)
         for it in items:
             it["Impuesto Especifico"] = 0
+
+
+def _elegir_escala(valor, referencia=None):
+    """Decide si `valor` viene con el punto de miles chileno. Devuelve un entero.
+
+    La regla vieja miraba la FORMA — "float con exactamente 3 decimales → ×1000"
+    — y eso no distingue el separador de miles del residuo de multiplicar por
+    1,19. Medido sobre el Master: de 41 valores con 3 decimales, la forma sola
+    rompía 35 y arreglaba 6.
+
+        563.600 × 1,19 = 670.684,976   3 decimales y PERFECTO
+        el modelo escribe 771.784      3 decimales y son 771784
+
+    Con `referencia` (lo que debería valer según el resto de la factura) se
+    prueban las dos hipótesis y gana la más cercana. Sin referencia se cae a la
+    regla vieja, que es el comportamiento histórico.
+    """
+    v = float(valor)
+    if v == int(v):
+        return int(v)                       # entero: nada que decidir
+
+    if referencia:
+        ref = float(referencia)
+        return int(round(min((v, v * 1000), key=lambda c: abs(c - ref))))
+
+    decimales = repr(v).split(".")[1].rstrip("0") if "." in repr(v) else ""
+    return int(round(v * 1000)) if len(decimales) == 3 else int(round(v))
