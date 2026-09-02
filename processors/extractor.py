@@ -556,7 +556,7 @@ def _call_claude(image_path: str, ocr_text: str) -> list:
 # MOTOR OLLAMA
 # ─────────────────────────────────────────────
 def _call_ollama(image_path: str, ocr_text: str) -> list:
-    from config import OLLAMA_HOST, OLLAMA_MODEL
+    from config import OLLAMA_HOST, OLLAMA_MODEL, OLLAMA_TIMEOUT
     try:
         with open(image_path, "rb") as f:
             img_b64 = base64.b64encode(f.read()).decode("utf-8")
@@ -569,7 +569,8 @@ def _call_ollama(image_path: str, ocr_text: str) -> list:
             "options": {"temperature": 0.1, "num_ctx": 4096}
         }
         logger.info(f"Llamando a Ollama/{OLLAMA_MODEL} ({len(img_b64)//1024} KB)...")
-        resp = requests.post(f"{OLLAMA_HOST}/api/chat", json=payload, timeout=60)
+        resp = requests.post(f"{OLLAMA_HOST}/api/chat", json=payload,
+                             timeout=OLLAMA_TIMEOUT)
         resp.raise_for_status()
         raw = resp.json()["message"]["content"].strip()
         logger.info(f"Ollama respondió: {raw[:300]}")
@@ -634,7 +635,7 @@ Reglas mínimas:
 
 def _ollama_disponible() -> bool:
     """Verifica si Ollama está corriendo y tiene el modelo de visión instalado."""
-    from config import OLLAMA_HOST, OLLAMA_MODEL
+    from config import OLLAMA_HOST, OLLAMA_MODEL, OLLAMA_TIMEOUT
     try:
         resp = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=3)
         modelos = [m["name"] for m in resp.json().get("models", [])]
@@ -1198,6 +1199,10 @@ def process_file(file_path: str) -> dict:
                     tag = " (combustible)" if es_combustible else ""
                     logger.info(f"OCR detectó Impuesto Específico{tag}: ${total_imp:,.0f}")
 
+        # Va DESPUÉS del barrido de OCR de arriba, que es justo quien inventa
+        # los impuestos que no existen: si la factura ya cuadra sin él, se saca.
+        sanear_impuesto_especifico(items)
+
         all_items.extend(items)
 
     # Limpiar temporales PDF
@@ -1219,3 +1224,60 @@ def process_file(file_path: str) -> dict:
     _registrar_factura(all_items, file_path)
 
     return {"status": "ok", "items": all_items, "duplicado": duplicado}
+
+
+# Un peso arriba o abajo es redondeo del emisor, no un impuesto.
+TOLERANCIA_CUADRE = 3
+
+
+def sanear_impuesto_especifico(items: list) -> None:
+    """Borra el impuesto específico cuando la factura cuadra sin él.
+
+    El impuesto específico es un cargo REAL de combustible (IEF, IEV, FEPP),
+    no el lugar donde se esconde lo que no cuadra. Pero `IMP_PATTERNS` barre el
+    OCR con patrones laxos y suma TODO lo que pesca, así que se colaban valores
+    inventados: en el Master quedó una factura con impuesto de $1 (ruido puro) y
+    otra donde `28.084 × 1,19 = 33.420` daba el total EXACTO y aun así tenía
+    $11.619 de impuesto encima.
+
+    La prueba es aritmética: si el neto por el IVA ya llega al total, no hay
+    impuesto que agregar. Si en cambio el impuesto es justo lo que falta para
+    llegar, es de verdad y se respeta.
+
+    Sin `Total Factura` no hay contra qué comparar y no se toca nada: mejor
+    dejar un impuesto dudoso que borrar uno bueno adivinando.
+    """
+    if not items:
+        return
+    try:
+        total = float(items[0].get("Total Factura") or 0)
+    except (TypeError, ValueError):
+        return
+    if total <= 0:
+        return
+
+    doc = str(items[0].get("Documento") or "").lower()
+    sin_iva = any(k in doc for k in ("exenta", "exento", "no afecta",
+                                     "no afecto", "boleta de honorario"))
+    iva_factor = 1.0 if sin_iva else 1.19
+
+    neto = 0.0
+    imp = 0.0
+    for it in items:
+        try:
+            neto += float(it.get("Valor unitario") or 0) * float(it.get("Cantidad") or 1)
+            imp += float(it.get("Impuesto Especifico") or 0)
+        except (TypeError, ValueError):
+            return
+    if imp == 0:
+        return
+
+    sin_impuesto = abs(neto * iva_factor - total)
+    con_impuesto = abs(neto * iva_factor + imp - total)
+    if sin_impuesto <= TOLERANCIA_CUADRE and sin_impuesto < con_impuesto:
+        logger.warning(
+            "Impuesto Específico descartado: la factura cuadra sin él "
+            "(neto %.0f x %.2f = %.0f = total %.0f). Venía $%.0f.",
+            neto, iva_factor, neto * iva_factor, total, imp)
+        for it in items:
+            it["Impuesto Especifico"] = 0
