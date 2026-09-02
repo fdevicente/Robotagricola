@@ -126,6 +126,69 @@ def encolar_documento(file_path: str, fecha_emision=None, cola=None,
         logger.warning("No pude encolar %s para Drive: %s", file_path, e)
 
 
+# Columnas de la hoja Facturas que identifican un documento.
+COL_PROV_FACT, COL_RUT_FACT, COL_NUMERO_FACT, COL_TOTAL_FACT = 4, 5, 7, 16
+
+
+def buscar_en_master(items, excel_path: str = None):
+    """Si esta factura YA está en el Master, devuelve sus datos. Si no, None.
+
+    El 2-sep-2026 aparecieron 7 facturas cargadas dos veces, $1.061.875 de
+    montos fantasma, todas por reenviar una foto ya procesada. La detección
+    vieja miraba `facturas_log.json`, un registro paralelo que se puede perder
+    o rotar. La verdad está en el Master: eso es "ya está guardada".
+
+    Cruza número Y proveedor porque hay 19 números que usan más de un
+    proveedor; solo por número se bloquearía una factura legítima.
+
+    Nunca lanza: perder la detección es malo, pero voltear el bot y perder el
+    documento del dueño es peor.
+    """
+    import re
+    if not items:
+        return None
+    try:
+        from openpyxl import load_workbook
+
+        from modules.drive.enlaces import _clave_proveedor, _normalizar
+        primero = items[0]
+        nro = _normalizar(primero.get("Numero Factura / Nro Documento"))
+        if not nro:
+            return None
+        rut = re.sub(r"[^\dkK]", "", str(primero.get("Rut") or "")).upper().lstrip("0")
+        prov = _clave_proveedor(primero.get("Nombre Factura / Proveedor"))
+
+        if excel_path is None:
+            from config import EXCEL_PATH as excel_path
+        wb = load_workbook(excel_path, read_only=True, data_only=True)
+        try:
+            ws = wb["Facturas"]
+            filas, total = [], None
+            for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+                if _normalizar(row[COL_NUMERO_FACT - 1]) != nro:
+                    continue
+                rut_fila = re.sub(r"[^\dkK]", "",
+                                  str(row[COL_RUT_FACT - 1] or "")).upper().lstrip("0")
+                # El RUT manda; el nombre solo si la fila no trae RUT.
+                if rut and rut_fila:
+                    if rut != rut_fila:
+                        continue
+                elif _clave_proveedor(row[COL_PROV_FACT - 1]) != prov:
+                    continue
+                filas.append(i)
+                if total is None:
+                    total = row[COL_TOTAL_FACT - 1]
+            if not filas:
+                return None
+            return {"nro": nro, "filas": filas, "total": total,
+                    "proveedor": str(primero.get("Nombre Factura / Proveedor") or "")}
+        finally:
+            wb.close()
+    except Exception as e:
+        logger.warning("No pude revisar si la factura ya estaba: %s", e)
+        return None
+
+
 def _factor_iva(items) -> float:
     """1.19, o 1.0 si el documento no lleva IVA."""
     doc = str((items[0] if items else {}).get("Documento") or "").lower()
@@ -592,6 +655,30 @@ async def _process_and_reply(update, context, status_msg, file_path, ud=None, pr
     encolar_documento(file_path,
                       fecha_emision=(items[0].get("Fecha Emision")
                                       if items else None))
+    # ── ¿YA ESTÁ EN EL MASTER? Entonces no se guarda de nuevo ────────────────
+    # Va ANTES de dejar `pending_items` y antes del modo capataz: si la factura
+    # queda pendiente, el botón de guardar la sube igual. Antes solo se pintaba
+    # un ⚠️ arriba del preview y el botón seguía ahí — así entraron 7 facturas
+    # dos veces, $1.061.875 de montos fantasma. El archivo ya se guardó en
+    # disco y se encoló a Drive, que es lo correcto: lo que no se repite es la
+    # fila en el Master.
+    ya = await asyncio.to_thread(buscar_en_master, items)
+    if ya:
+        ud["pending_items"] = []
+        ud["pending_file_path"] = None
+        try:
+            total = "${:,.0f}".format(float(ya["total"] or 0)).replace(",", ".")
+        except (TypeError, ValueError):
+            total = str(ya["total"])
+        await status_msg.edit_text(
+            "🚫 *Esta factura ya está guardada.*\n\n"
+            "Nº%s · %s\n%s · %d línea(s) en el Master\n\n"
+            "No la volví a guardar. El archivo sí quedó respaldado."
+            % (ya["nro"], ya["proveedor"], total, len(ya["filas"])),
+            parse_mode="Markdown")
+        await _procesar_siguiente_de_cola(context, status_msg.chat_id)
+        return
+
     ud["pending_items"] = items
     ud["pending_file_path"] = file_path
     ud["editing_field"] = None
