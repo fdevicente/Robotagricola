@@ -736,7 +736,8 @@ def _call_ia(image_path: str, ocr_text: str) -> list:
     ollama_ok = _ollama_disponible()
     futures = {}
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+    ex = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+    try:
         if ANTHROPIC_API_KEY:
             futures["claude"] = ex.submit(_call_claude, image_path, ocr_text)
         if ollama_ok:
@@ -751,11 +752,20 @@ def _call_ia(image_path: str, ocr_text: str) -> list:
             except Exception as e:
                 logger.warning(f"Claude falló en paralelo: {e}")
 
-        if "ollama" in futures:
+        # Solo se espera a Ollama si Claude NO trajo nada, porque ahí sí es el
+        # fallback. Si Claude contestó, quedarse esperando cuesta ~24 s por
+        # factura (Ollama ~30 s contra ~6 s de Claude) para no usar el
+        # resultado en nada más que una línea de log. Antes era gratis porque
+        # Ollama estaba roto y fallaba en 3,8 s; al arreglarlo, la espera pasó
+        # a ser el cuello de botella de cada documento.
+        if not claude_items and "ollama" in futures:
             try:
                 ollama_items = futures["ollama"].result(timeout=90) or []
             except Exception as e:
                 logger.warning(f"Ollama falló en paralelo: {e}")
+    finally:
+        # Sin esperar: si Ollama sigue trabajando, que termine por su cuenta.
+        ex.shutdown(wait=False)
 
     # ── Claude tiene prioridad absoluta ───────────────────────────────────────
     if claude_items:
