@@ -630,6 +630,12 @@ Reglas mínimas:
 - Proveedor = quien emite (encabezado superior), NO el receptor.
 - Monto/TOTAL y Total Factura = TOTAL del documento (con IVA si aplica).
 - Si hay varios ítems, crea un objeto por ítem con los mismos datos de cabecera.
+- NUNCA uses separadores de miles en los números. Esto es JSON, no un recibo:
+  el punto de "$116.463" es separador de miles y en JSON se lee como decimal,
+  así que $116.463 se convertiría en ciento dieciséis coma cuatro.
+    correcto:   "Total Factura":116463
+    incorrecto: "Total Factura":116.463
+  Escribe los montos como enteros pelados, sin puntos, sin comas y sin "$".
 - Solo JSON, sin texto adicional."""
 
 
