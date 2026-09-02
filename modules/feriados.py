@@ -30,6 +30,32 @@ FERIADOS = {
         date(2026, 12, 8):  "Inmaculada Concepción",
         date(2026, 12, 25): "Navidad",
     },
+    # 2027. Los movibles ya resueltos:
+    #   San Pedro y San Pablo: el 29-jun cae MARTES -> lunes 28 (Ley 19.668).
+    #   Encuentro de Dos Mundos: el 12-oct cae MARTES -> lunes 11 (Ley 19.668).
+    #   Iglesias Evangelicas: el 31-oct cae DOMINGO -> se queda (la Ley 20.299
+    #     solo lo mueve si cae martes o miercoles).
+    #   Semana Santa: Pascua es el domingo 28-mar, asi que Viernes Santo es el
+    #     26 y Sabado Santo el 27.
+    #   El 18-sep cae SABADO, asi que no aplica el dia extra de la Ley 20.215.
+    2027: {
+        date(2027, 1, 1):   "Año Nuevo",
+        date(2027, 3, 26):  "Viernes Santo",
+        date(2027, 3, 27):  "Sábado Santo",
+        date(2027, 5, 1):   "Día del Trabajo",
+        date(2027, 5, 21):  "Glorias Navales",
+        date(2027, 6, 21):  "Día de los Pueblos Indígenas",
+        date(2027, 6, 28):  "San Pedro y San Pablo",
+        date(2027, 7, 16):  "Virgen del Carmen",
+        date(2027, 8, 15):  "Asunción de la Virgen",
+        date(2027, 9, 18):  "Independencia Nacional",
+        date(2027, 9, 19):  "Glorias del Ejército",
+        date(2027, 10, 11): "Encuentro de Dos Mundos",
+        date(2027, 10, 31): "Iglesias Evangélicas",
+        date(2027, 11, 1):  "Día de Todos los Santos",
+        date(2027, 12, 8):  "Inmaculada Concepción",
+        date(2027, 12, 25): "Navidad",
+    },
 }
 
 
