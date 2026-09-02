@@ -13,8 +13,15 @@ except ImportError:
         return os.getenv(key, fallback)
 
 TELEGRAM_TOKEN    = get_secret("TELEGRAM_TOKEN")
-OLLAMA_MODEL      = os.getenv("OLLAMA_MODEL", "llama3.2-vision-fast")
+# qwen2.5vl y no llama3.2-vision: esa ultima usa la arquitectura mllama,
+# que Ollama dejo de soportar en la 0.33 y ya no carga (falla hasta sin
+# imagen). Medido con qwen2.5vl sobre una factura real: neto y total
+# exactos contra el Master, en 55 segundos.
+OLLAMA_MODEL      = os.getenv("OLLAMA_MODEL", "qwen2.5vl:7b")
 OLLAMA_HOST       = os.getenv("OLLAMA_HOST",  "http://localhost:11434")
+# 55 s tardo una factura de verdad. Con los 60 de antes el motor local
+# quedaba "no disponible" por cinco segundos.
+OLLAMA_TIMEOUT    = int(os.getenv("OLLAMA_TIMEOUT", "180"))
 EXCEL_PATH        = os.getenv("EXCEL_PATH",   os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "MASTER Agricola Santa Elisa.xlsx"))
 DOWNLOAD_DIR      = os.getenv("DOWNLOAD_DIR", "Facturas Recibidas por Telegram")
 BOLETAS_DIR       = os.getenv("BOLETAS_DIR",  os.path.join(os.path.dirname(DOWNLOAD_DIR), "Boletas Recibidas por Telegram"))
