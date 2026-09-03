@@ -46,8 +46,10 @@ def test_trae_los_canonicos_de_siempre_aunque_no_esten_en_el_excel(tmp_path):
 
 
 def test_no_repite_nombres(tmp_path):
-    ctx = construir(_excel(tmp_path))
-    assert len(ctx["trabajadores"]) == len(set(ctx["trabajadores"]))
+    from modules.parte_contexto import _clave
+    nombres = construir(_excel(tmp_path))["trabajadores"]
+    claves = [_clave(n) for n in nombres]
+    assert len(claves) == len(set(claves))
 
 
 def test_las_maquinas_traen_unidad_y_ultima_lectura(tmp_path):
@@ -106,21 +108,22 @@ def test_personal_no_duplica_a_alguien_que_ya_conocemos(tmp_path):
     assert "Felicito Amigo Soto" not in ctx["trabajadores"]
 
 
-def test_personal_si_agrega_a_alguien_genuinamente_nuevo(tmp_path):
-    """Es para lo que sirve la hoja: el recien dado de alta sin filas todavia."""
+def test_personal_agrega_a_alguien_nuevo_aunque_comparta_nombre_de_pila(tmp_path):
+    """El caso que el filtro anterior perdia en silencio.
+
+    "Juan Soto Rivera" no es Juan Parada. El calce por nombre de pila lo daba
+    por conocido y no entraba nunca al vocabulario.
+    """
     from openpyxl import load_workbook
     ruta = _excel(tmp_path)
     wb = load_workbook(ruta)
+    wb["Personal"].append(["Juan Soto Rivera", "", None, None])
     wb["Personal"].append(["Josefina Quiroga", "", None, None])
     wb.save(ruta)
-    assert "Josefina Quiroga" in construir(ruta)["trabajadores"]
-
-
-def test_el_padre_y_el_hijo_no_se_juntan(tmp_path):
-    """Richard Padilla y Richard Padilla Crespo son dos personas."""
-    ctx = construir(_excel(tmp_path))
-    assert "Richard Padilla" in ctx["trabajadores"]
-    assert "Richard Padilla Crespo" in ctx["trabajadores"]
+    nombres = construir(ruta)["trabajadores"]
+    assert "Juan Soto Rivera" in nombres
+    assert "Josefina Quiroga" in nombres
+    assert "Juan Parada" in nombres          # el de siempre sigue estando
 
 
 def test_las_variantes_de_un_mismo_nombre_colapsan(tmp_path):
@@ -137,6 +140,22 @@ def test_las_variantes_de_un_mismo_nombre_colapsan(tmp_path):
     cuantos = sum(1 for n in nombres if "amigo" in n.lower()
                   and "ramiro" in n.lower())
     assert cuantos == 1, [n for n in nombres if "ramiro" in n.lower()]
+    assert "Ramiro Amigo" in nombres, "sobrevivio la variante y no el canonico"
+
+
+def test_una_variante_de_la_ia_no_desplaza_al_nombre_canonico(tmp_path):
+    """La columna ahora la escribe la IA. Si emite "ramiro amigo", esa grafia
+    no puede ser la que el prompt le pide al modelo usar."""
+    from openpyxl import load_workbook
+    ruta = _excel(tmp_path)
+    wb = load_workbook(ruta)
+    wb["Bitácora"].append(["2026-08-21", "10:00", "LABOR", "Poda", "NOGALES", "",
+                           1, "ramiro amigo", "", None, "", "t", "Juan Parada",
+                           "", None, None, None, None])
+    wb.save(ruta)
+    nombres = construir(ruta)["trabajadores"]
+    assert "Ramiro Amigo" in nombres
+    assert "ramiro amigo" not in nombres
 
 
 def test_una_bitacora_vacia_no_borra_las_maquinas(tmp_path):

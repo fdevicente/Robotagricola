@@ -51,19 +51,26 @@ def construir(excel_path: str | None = None) -> dict:
     from openpyxl import load_workbook
 
     from config import EXCEL_PATH
-    from modules.bitacora_asistencia import _canonico
+    from modules.bitacora_asistencia import canonico_por_nombre_completo
     from modules.bitacora_extractor import ALIAS, TRABAJADORES_CONOCIDOS
     from modules.maquinaria import maquinas_conocidas
 
     ruta = excel_path or EXCEL_PATH
-    vistos, orden = set(), []
+    vistos, orden = {}, []            # clave normalizada -> posicion en orden
 
-    def _sumar(n):
+    def _sumar(n, canonico=False):
         n = str(n or "").strip()
         k = _clave(n)
-        if k and k not in vistos:
-            vistos.add(k)
+        if not k:
+            return
+        if k not in vistos:
+            vistos[k] = len(orden)
             orden.append(n)
+        elif canonico:
+            # La posicion la fija quien llego primero, pero la GRAFIA la gana el
+            # canonico: la de la bitacora puede ser una variante que escribio la
+            # IA, y esa no puede desplazar al nombre bueno en el prompt.
+            orden[vistos[k]] = n
 
     def _leer(hoja, saca):
         try:
@@ -92,16 +99,16 @@ def construir(excel_path: str | None = None) -> dict:
         for row in ws.iter_rows(min_row=2, max_col=1, values_only=True):
             if not row or not row[0]:
                 continue
-            # Solo la gente que NO conocemos ya. _canonico calza por tokens y
-            # sabe que "Richard Padilla" y "Richard Padilla Crespo" son padre e
-            # hijo, no un duplicado, asi que no los junta.
-            if _canonico(row[0]) is None:
+            # Solo la gente que NO conocemos ya. Se usa la version estricta, por
+            # tokens completos: _canonico entero calza por nombre de pila y
+            # descartaria a un "Juan Soto Rivera" recien contratado.
+            if canonico_por_nombre_completo(row[0]) is None:
                 _sumar(row[0])
 
     # El ORDEN importa: es el orden en que la lista se le muestra al modelo.
     _leer(BITACORA_SHEET, _de_bitacora)       # 1 — el vocabulario que ya se usa
     for n in TRABAJADORES_CONOCIDOS:          # 2 — los de siempre
-        _sumar(n)
+        _sumar(n, canonico=True)
     _leer(PERSONAL_SHEET, _de_personal)       # 3 — solo los que no conocemos
 
     try:
