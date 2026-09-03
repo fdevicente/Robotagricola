@@ -48,6 +48,17 @@ def construir(excel_path: str | None = None) -> dict:
                         if len(row) > i and row[i]:
                             for n in str(row[i]).split(","):
                                 _sumar(n)
+        finally:
+            wb.close()
+    except Exception as e:                    # un Excel raro no puede voltear esto
+        logger.warning("parte_contexto: no pude leer %s: %s", ruta, e)
+
+    for n in TRABAJADORES_CONOCIDOS:          # los de siempre, con sus apodos
+        _sumar(n)
+
+    try:
+        wb = load_workbook(ruta, read_only=True, data_only=True)
+        try:
             if PERSONAL_SHEET in wb.sheetnames:
                 for row in wb[PERSONAL_SHEET].iter_rows(min_row=2, max_col=1,
                                                         values_only=True):
@@ -56,10 +67,7 @@ def construir(excel_path: str | None = None) -> dict:
         finally:
             wb.close()
     except Exception as e:                    # un Excel raro no puede voltear esto
-        logger.warning("parte_contexto: no pude leer %s: %s", ruta, e)
-
-    for n in TRABAJADORES_CONOCIDOS:          # los de siempre, con sus apodos
-        _sumar(n)
+        logger.warning("parte_contexto: no pude leer Personal en %s: %s", ruta, e)
 
     try:
         maquinas = maquinas_conocidas(ruta)

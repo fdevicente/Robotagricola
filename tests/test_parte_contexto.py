@@ -69,3 +69,10 @@ def test_un_excel_sin_hojas_no_revienta(tmp_path):
     ctx = construir(str(ruta))
     assert ctx["trabajadores"]          # quedan los canónicos de siempre
     assert ctx["maquinas"] == []
+
+
+def test_los_canonicos_van_antes_que_los_nombres_legales_de_personal(tmp_path):
+    """El orden es el que ve el modelo: primero los nombres que el bot escribe."""
+    ctx = construir(_excel(tmp_path))
+    nombres = ctx["trabajadores"]
+    assert nombres.index("Patricio Mora") < nombres.index("Felicito Amigo Soto")
