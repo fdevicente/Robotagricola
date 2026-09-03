@@ -72,7 +72,6 @@ def _canonico(nombre_crudo: str):
     palabras = [p for p in re.split(r"[^a-z]+", txt) if p]
     if not palabras:
         return None
-    sueltas = set(palabras)
 
     # 1) Nombre completo: de los que estén contenidos enteros, el más largo.
     completo = canonico_por_nombre_completo(nombre_crudo)
