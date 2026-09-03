@@ -60,7 +60,17 @@ Anotacion = {
 }
 ```
 
-`Contexto` es lo que el bot ya sabe y la IA necesita para normalizar: los trabajadores de la hoja `Personal` y las máquinas de la hoja `Maquinaria`, con su modelo y su unidad (h o km). Se arma una vez por mensaje y se le pasa igual al lector y al juez, para que los dos midan contra lo mismo.
+`Contexto` es lo que el bot ya sabe y la IA necesita para normalizar. Se arma una vez por mensaje y se le pasa **igual al lector y al juez**, para que los dos midan contra lo mismo.
+
+⚠️ **Los trabajadores NO salen solo de la hoja `Personal`.** Medido el 2-sep: `Personal` tiene **6 filas** y con el nombre legal completo (`Felicito Amigo Soto`, `Luis Ramiro Amigo Soto`), mientras la columna `Trabajadores` de la bitácora usa **8 nombres canónicos** distintos (`Felicito Amigo`, `Ramiro Amigo`) y **Richard Padilla y Richard Padilla Crespo no están en `Personal`**. Armar el contexto solo con esa hoja dejaría a la IA peor informada que hoy.
+
+La lista es la **unión de tres fuentes**, y manda la primera:
+
+1. la columna `Trabajadores` de la hoja `Bitácora` — el vocabulario que el bot ya usa;
+2. `TRABAJADORES_CONOCIDOS` y `ALIAS` de `bitacora_extractor` — trae los apodos (`pato` → `Patricio Mora`) y la regla de que `richard` a secas es el padre;
+3. la hoja `Personal` — para que un trabajador recién dado de alta aparezca aunque todavía no tenga ninguna fila en la bitácora.
+
+Las máquinas sí salen de `maquinas_conocidas()`, que ya une la hoja `Maquinaria` con lo visto en la bitácora y trae la última lectura y la unidad (h o km).
 
 Dos diferencias con `bitacora_extractor` de hoy:
 
