@@ -17,7 +17,40 @@ Además hay dos vocabularios distintos: el prompt de `bitacora_extractor` conoce
 
 ## Objetivo
 
-Que **cualquier cosa que escriba Juan**, en el formato que sea, la lea la IA y quede anotada donde corresponde, sin que él tenga que recordar nada ni apretar nada.
+Que **cualquier cosa que haga Juan** quede anotada donde corresponde, sin que tenga que recordar un formato.
+
+## 🔄 Revisión del 3-sep-2026: primero botones, la IA solo donde hace falta
+
+**Se midió qué hace Juan de verdad**, sobre todo el respaldo crudo:
+
+| | |
+|---|---:|
+| **Intentos de comando** | **15** |
+| Fotos de factura | 8 |
+| Partes de horómetro | 8 |
+| Partes de asistencia | 7 |
+
+Juan hace **tres cosas**: manda facturas por foto, el parte de asistencia del día y lecturas de horómetro. No toca tareas, ni inventario, ni vencimientos.
+
+Y el número más grande son **15 intentos de comando**, muchos rotos (`/ cancelar`, `/ bitacora`, `/ Asistencia`, `/` a secas). **Juan está buscando un menú y no lo encuentra.** El diseño original daba por hecho que había que leerle la mente; el dato dice que además hay que darle dónde apretar.
+
+⚠️ **Una suposición que había que corregir**: se había dado por hecho que Juan no aprieta botones. No hay con qué sostenerlo — la única vez comprobable (el `/bitacora` del 27-ago) el flujo trabado se comió el mensaje **antes** de que el bot le mostrara nada, así que el botón nunca le llegó. Y el 2-sep sí apretó uno.
+
+### El reparto
+
+| Lo que hace Juan | Cómo se anota | Por qué |
+|---|---|---|
+| **Horómetro** | **Botones, paso a paso** | Son tres datos y la máquina sale de una lista. Mata de raíz los dos riesgos que la IA obligaba a vigilar: la máquina inventada y el error de dígitos. Y valida contra la última lectura **mientras Juan está frente al tractor**. |
+| **Asistencia** | **Texto libre, lo lee la IA** | El parte del 31-ago trae 19 personas en 3 labores. Preguntarle uno por uno son ~38 idas y vueltas para algo que hoy resuelve pegando un bloque. Aquí la IA sí aporta. |
+| **Factura** | Foto, como hoy | Ya funciona. No se toca. |
+
+El acceso es un **teclado persistente** (`ReplyKeyboardMarkup`): tres botones fijos sobre el teclado de Telegram, siempre visibles. No hace falta preguntarle "¿quieres ingresar datos?" antes de cada cosa — eso agregaría una ida y vuelta a lo que hoy se resuelve en un mensaje.
+
+### Lo que esto saca del alcance de la IA
+
+**`MANTENCION` y `FICHA` salen.** Se midieron: Juan mandó **cero**. El dueño las carga por `/maquinaria`, que sigue igual. El lector queda con dos destinos, `BITACORA` y `HOROMETRO`, y este último solo como red por costumbre: Juan va a seguir escribiendo partes de horómetro a mano un tiempo, y esos hay que leerlos igual.
+
+Esto se implementa en dos planes: `2026-09-03-teclado-y-horometro-guiado.md` primero, que se entrega solo, y el de la lectura con IA después.
 
 ## Decisiones tomadas
 
@@ -68,7 +101,15 @@ La lista es la **unión de tres fuentes**, y manda la primera:
 
 1. la columna `Trabajadores` de la hoja `Bitácora` — el vocabulario que el bot ya usa;
 2. `TRABAJADORES_CONOCIDOS` y `ALIAS` de `bitacora_extractor` — trae los apodos (`pato` → `Patricio Mora`) y la regla de que `richard` a secas es el padre;
-3. la hoja `Personal` — para que un trabajador recién dado de alta aparezca aunque todavía no tenga ninguna fila en la bitácora.
+3. la hoja `Personal`, **pero solo la gente que las dos primeras no conocen ya**.
+
+⚠️ **Ese "solo" no es un detalle.** Medido el 3-sep-2026 al implementarlo: `Personal` guarda el nombre **legal completo** y la bitácora el **canónico**, así que meter las dos listas daba **15 nombres para 10 personas** (`Felicito Amigo` + `Felicito Amigo Soto`, `Patricio Mora` + `Luis Patricio Mora Amigo`, …). De las 6 filas de `Personal`, **5 eran duplicados y ninguna era gente nueva**.
+
+Y no es cosmético: el contexto va al prompt **y** al juez, así que la IA recibe dos nombres válidos para la misma persona, el juez le aprueba cualquiera de los dos, y el que salga se escribe en la columna `Trabajadores`. `bitacora_asistencia` solo cuenta jornadas de los canónicos, o sea que un nombre legal escrito ahí **desaparece de las jornadas-hombre**.
+
+El filtro es `bitacora_asistencia._canonico`, que ya existe: calza por tokens, mapea los 5 nombres legales a su canónico, devuelve `None` para gente genuinamente nueva, y **mantiene separados a Richard Padilla y a Richard Padilla Crespo**, que son padre e hijo. Así `Personal` sigue cumpliendo su función —que un recién dado de alta aparezca sin tener todavía ninguna fila— sin duplicar a nadie.
+
+Los nombres se comparan **sin tildes, sin mayúsculas y con los espacios colapsados**. Antes daba lo mismo porque la columna la escribía el bot; ahora la escribe la IA y el ciclo es cerrado: lo que la IA emita una vez se lee de vuelta al mensaje siguiente y se queda en el vocabulario para siempre.
 
 Las máquinas sí salen de `maquinas_conocidas()`, que ya une la hoja `Maquinaria` con lo visto en la bitácora y trae la última lectura y la unidad (h o km).
 

@@ -10,6 +10,14 @@
 
 **Diseño:** `docs/superpowers/specs/2026-09-02-partes-juan-lectura-ia-design.md`
 
+> 🔄 **Este plan pasó a ser el SEGUNDO, y con menos alcance.** El 3-sep-2026, midiendo qué manda Juan de verdad, se vio que hace tres cosas y que sus **15 intentos de comando** dicen que está buscando un menú. Primero va `2026-09-03-teclado-y-horometro-guiado.md`, que se entrega solo.
+>
+> Qué cambia acá cuando llegue el turno:
+> - **`MANTENCION` y `FICHA` salen de los destinos.** Medido: Juan mandó **cero**. El dueño las carga por `/maquinaria`, que no se toca. Quedan `BITACORA` y `HOROMETRO`.
+> - **El horómetro deja de ser el camino principal** y queda como red: Juan va a seguir escribiendo partes a mano por costumbre y esos hay que leerlos igual. Sus casos de prueba siguen valiendo.
+> - **La asistencia es la razón de ser de este plan**: 19 personas en 3 labores no se ingresan a botonazos.
+> - La Task 1 (el contexto) ya está hecha y la usan los dos planes.
+
 ---
 
 ## Antes de empezar — cosas de esta máquina
@@ -107,6 +115,12 @@ Duda = {
 - Test: `tests/test_parte_contexto.py`
 
 ⚠️ **Ojo con esto**, que es contraintuitivo: los trabajadores **no** salen solo de la hoja `Personal`. Medido el 2-sep-2026: `Personal` tiene 6 filas con el nombre legal completo (`Felicito Amigo Soto`), la bitácora usa 8 nombres canónicos (`Felicito Amigo`), y **Richard Padilla y Richard Padilla Crespo no están en `Personal`**. Manda el vocabulario de la bitácora.
+
+> 🔴 **EJECUTADA — y el código de abajo quedó corto.** La revisión de calidad, midiendo contra el Master real, encontró que unir las dos listas tal cual da **15 nombres para 10 personas**: de las 6 filas de `Personal`, 5 son el nombre legal de alguien que la bitácora ya conoce y **ninguna es gente nueva**. Eso le da a la IA dos nombres válidos para la misma persona, y el que elija se escribe en la hoja y desaparece de las jornadas-hombre, porque `bitacora_asistencia` solo cuenta canónicos.
+>
+> El estado bueno está en los commits de la rama, no en este bloque. Los tres cambios: `Personal` pasa por `bitacora_asistencia._canonico` y solo entra quien no se conozca; los nombres se comparan sin tildes, mayúsculas ni espacios de más (la columna ahora la escribe la IA y el ciclo es cerrado); y se arregló en `modules/maquinaria.py` un `next()` sin proteger que, con una hoja `Bitácora` vacía, se llevaba la hoja `Maquinaria` **entera** en silencio.
+>
+> Ver la spec, sección del `Contexto`, que ya está corregida.
 
 - [ ] **Step 1: Escribir el test que falla**
 
