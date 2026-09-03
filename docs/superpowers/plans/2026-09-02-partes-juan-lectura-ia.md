@@ -30,6 +30,16 @@ alias py='/c/Users/Windows/AppData/Local/Python/bin/python3.11.exe'
 
 **Mensajes de commit en español**, terminados en `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.
 
+### Si se trabaja en un worktree
+
+Se ejecutó en `~/.config/superpowers/worktrees/Robot/partes-ia`, rama `feature/partes-lectura-ia`, para que el código a medio escribir no quede en la carpeta desde la que corre el bot. Un worktree recién creado **no arranca con la suite en verde**; hacen falta tres cosas que el `.gitignore` deja fuera:
+
+1. **`files/` está ignorado**, así que el respaldo crudo de Telegram no viaja. Copiar `files/telegram/*.jsonl`: sin eso, las tareas 3 y 10 no tienen los partes de Juan.
+2. **`.env` está ignorado.** Copiarlo (la tarea 3 necesita `ANTHROPIC_API_KEY`) y **apuntar `EXCEL_PATH` a una copia del Master**, para que nada del worktree pueda tocar el de producción.
+3. **39 tests se saltan `EXCEL_PATH`** y arman a mano `tests/../../MASTER Agricola Santa Elisa.xlsx`. Hay que dejar una copia del Master **un nivel por encima del worktree** o esos 39 dan `FileNotFoundError`. (Que esos tests ignoren la configuración es un problema aparte; no es de este plan.)
+
+Con las tres cosas, el baseline da **710 passed**, igual que `main`.
+
 ---
 
 ## Estructura de archivos
@@ -159,6 +169,13 @@ def test_no_repite_nombres(tmp_path):
     assert len(ctx["trabajadores"]) == len(set(ctx["trabajadores"]))
 
 
+def test_los_canonicos_van_antes_que_los_nombres_legales_de_personal(tmp_path):
+    """El orden es el que ve el modelo: primero los nombres que el bot escribe."""
+    ctx = construir(_excel(tmp_path))
+    nombres = ctx["trabajadores"]
+    assert nombres.index("Patricio Mora") < nombres.index("Felicito Amigo Soto")
+
+
 def test_las_maquinas_traen_unidad_y_ultima_lectura(tmp_path):
     ctx = construir(_excel(tmp_path))
     assert isinstance(ctx["maquinas"], list)
@@ -222,30 +239,40 @@ def construir(excel_path: str | None = None) -> dict:
             nombres.add(n)
             orden.append(n)
 
-    try:
-        wb = load_workbook(ruta, read_only=True, data_only=True)
+    # El ORDEN importa: es el orden en que la lista se le muestra al modelo.
+    # Primero los nombres que el bot realmente escribe en la hoja, después los
+    # nombres legales largos de Personal.
+    def _leer(hoja, saca):
         try:
-            if BITACORA_SHEET in wb.sheetnames:
-                ws = wb[BITACORA_SHEET]
-                enc = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
-                if "Trabajadores" in enc:
-                    i = enc.index("Trabajadores")
-                    for row in ws.iter_rows(min_row=2, values_only=True):
-                        if len(row) > i and row[i]:
-                            for n in str(row[i]).split(","):
-                                _sumar(n)
-            if PERSONAL_SHEET in wb.sheetnames:
-                for row in wb[PERSONAL_SHEET].iter_rows(min_row=2, max_col=1,
-                                                        values_only=True):
-                    if row:
-                        _sumar(row[0])
-        finally:
-            wb.close()
-    except Exception as e:                    # un Excel raro no puede voltear esto
-        logger.warning("parte_contexto: no pude leer %s: %s", ruta, e)
+            wb = load_workbook(ruta, read_only=True, data_only=True)
+            try:
+                if hoja in wb.sheetnames:
+                    saca(wb[hoja])
+            finally:
+                wb.close()
+        except Exception as e:                # un Excel raro no puede voltear esto
+            logger.warning("parte_contexto: no pude leer %s de %s: %s",
+                           hoja, ruta, e)
 
-    for n in TRABAJADORES_CONOCIDOS:          # los de siempre, con sus apodos
+    def _de_bitacora(ws):
+        enc = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
+        if "Trabajadores" not in enc:
+            return
+        i = enc.index("Trabajadores")
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if len(row) > i and row[i]:
+                for n in str(row[i]).split(","):
+                    _sumar(n)
+
+    def _de_personal(ws):
+        for row in ws.iter_rows(min_row=2, max_col=1, values_only=True):
+            if row:
+                _sumar(row[0])
+
+    _leer(BITACORA_SHEET, _de_bitacora)       # 1 — el vocabulario que ya se usa
+    for n in TRABAJADORES_CONOCIDOS:          # 2 — los de siempre, con sus apodos
         _sumar(n)
+    _leer(PERSONAL_SHEET, _de_personal)       # 3 — los recién dados de alta
 
     try:
         maquinas = maquinas_conocidas(ruta)
@@ -259,7 +286,7 @@ def construir(excel_path: str | None = None) -> dict:
 - [ ] **Step 4: Correr el test y comprobar que pasa**
 
 Run: `py -m pytest tests/test_parte_contexto.py -q`
-Expected: PASS, 6 passed
+Expected: PASS, 7 passed
 
 - [ ] **Step 5: Comprobarlo contra el Master de verdad**
 
