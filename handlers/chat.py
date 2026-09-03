@@ -6,6 +6,7 @@ Si no hay flujo, usa el chat inteligente.
 import logging
 
 from chat_inteligente import responder_chat
+from modules.flujos import MINUTOS_VIDA, revisar_flujos
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,15 @@ async def handle_text(update, context):
     from handlers.personal import handle_text_vacacion, handle_text_trabajador
     from handlers.vencimientos import handle_text_vencimiento
     from handlers.facturas import handle_text_edit_factura
+
+    # ── Flujos vencidos: se sueltan ANTES de repartir ──
+    # Un flujo a medias se queda con todo el texto que llegue. El 28-ago-2026
+    # un /deposito sin cerrar se comio 12 dias de partes de Juan en silencio.
+    descartado = revisar_flujos(context.user_data)
+    if descartado:
+        await update.message.reply_text(
+            f"🧹 Cancelé el {descartado} que quedó a medias "
+            f"(más de {MINUTOS_VIDA} min sin terminar). Sigo con tu mensaje.")
 
     # ── Flujos activos (orden de prioridad) ──
     if await handle_text_deposito(update, context):

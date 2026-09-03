@@ -239,10 +239,10 @@ from handlers.banco_upload import cb_cart_import, cb_cart_cancel
 
 
 async def cmd_cancelar(update, context):
-    for key in ("pagado_state", "pagado_nro", "deposito_state", "editing_field",
-                "editing_item_idx", "tarea_state", "uso_state", "uso_data",
-                "vacacion_state", "vacacion_data", "trabajador_state", "bitacora_state"):
-        context.user_data[key] = None
+    # La lista vive en modules/flujos.py: si se agrega un flujo nuevo y aca
+    # quedara una copia, /cancelar dejaria ese flujo abierto para siempre.
+    from modules.flujos import limpiar_flujos
+    limpiar_flujos(context.user_data)
     await update.message.reply_text("🚫 Operación cancelada.")
 
 async def cmd_deshacer(update, context):
