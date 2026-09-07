@@ -263,7 +263,10 @@ def maquinas_conocidas(excel_path: str | None = None) -> list:
         vistas = defaultdict(lambda: {"odometro": None, "fecha": None})
         if "Bitácora" in wb.sheetnames:
             ws = wb["Bitácora"]
-            enc = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
+            # Una hoja Bitacora vacia lanzaba StopIteration y se perdia la hoja
+            # Maquinaria ENTERA, en silencio.
+            _fila_enc = next(ws.iter_rows(min_row=1, max_row=1), None)
+            enc = [c.value for c in _fila_enc] if _fila_enc else []
             try:
                 iM, iO = enc.index("Máquina"), enc.index("Odómetro")
             except ValueError:

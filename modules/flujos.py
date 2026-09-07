@@ -30,6 +30,7 @@ CLAVES_ESTADO = (
     "tarea_state",
     "bitacora_state",
     "venc_state",          # faltaba en /cancelar: tambien se puede trabar
+    "horo_state",          # flujo guiado de horómetro
     "uso_state",
     "vacacion_state",
     "trabajador_state",
@@ -43,6 +44,7 @@ CLAVES_DATOS = (
     "tarea_desc", "tarea_id_hecho",
     "bitacora_registrado_por", "bitacora_pending",
     "venc_pendientes", "venc_idx",
+    "horo_data",
     "uso_data",
     "vacacion_data",
     "editing_item_idx", "editing_field_label",

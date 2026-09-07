@@ -44,6 +44,24 @@ _TOKENS = {n: set(_sin_tildes(n).split()) for n in TRABAJADORES_CONOCIDOS}
 _TOKENS.setdefault("Javier Gonzalez", {"javier", "gonzalez"})
 
 
+def canonico_por_nombre_completo(nombre: str):
+    """Canonico solo si TODOS sus tokens estan en `nombre`. Sin calce por pila.
+
+    Es el paso 1 de `_canonico`, expuesto aparte porque hay usos que NO pueden
+    permitirse el paso 2. `_canonico` completo calza por nombre de pila suelto
+    --"Juan Soto Rivera" -> "Juan Parada"-- que es lo correcto al parsear una
+    linea del parte de Juan, pero sobre la hoja Personal descarta a un
+    trabajador nuevo de verdad.
+
+    OJO: "Jorge" es un canonico de un solo token, sin apellido, asi que sigue
+    calzando con cualquier "Jorge Lo Que Sea". Eso es del dato, no del calce.
+    """
+    txt = _sin_tildes(str(nombre or ""))
+    sueltas = {p for p in re.split(r"[^a-z]+", txt) if p}
+    completos = [n for n, toks in _TOKENS.items() if toks and toks <= sueltas]
+    return max(completos, key=lambda n: len(_TOKENS[n])) if completos else None
+
+
 def _canonico(nombre_crudo: str):
     """Devuelve el nombre canónico si la línea empieza con un trabajador.
 
@@ -54,12 +72,11 @@ def _canonico(nombre_crudo: str):
     palabras = [p for p in re.split(r"[^a-z]+", txt) if p]
     if not palabras:
         return None
-    sueltas = set(palabras)
 
     # 1) Nombre completo: de los que estén contenidos enteros, el más largo.
-    completos = [n for n, toks in _TOKENS.items() if toks and toks <= sueltas]
-    if completos:
-        return max(completos, key=lambda n: len(_TOKENS[n]))
+    completo = canonico_por_nombre_completo(nombre_crudo)
+    if completo:
+        return completo
 
     # 2) Por alias/nombre de pila. Si distintas palabras apuntan a personas
     #    distintas ("Richard crespo"), gana igual la más específica.

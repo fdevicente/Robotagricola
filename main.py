@@ -177,6 +177,13 @@ async def cmd_start(update, context):
     #  para re-apuntarlo a propósito: correr /banco en el chat deseado)
     if not context.bot_data.get("banco_chat_id"):
         context.bot_data["banco_chat_id"] = update.effective_chat.id
+    # El teclado fijo solo para los capataces: el dueño usa comandos y no le
+    # sirve que le ocupen el teclado con tres botones que no va a usar.
+    from config import AUTO_SAVE_USERS
+    from handlers.teclado import teclado_capataz
+    _kb = (teclado_capataz()
+           if update.effective_user and update.effective_user.id in AUTO_SAVE_USERS
+           else None)
     await update.message.reply_text(
         "👋 ¡Hola! Soy el bot de *Agrícola Santa Elisa*.\n\n"
         "📲 Envíame una *foto* o *PDF* de una factura.\n"
@@ -205,7 +212,7 @@ async def cmd_start(update, context):
         "  /deshacer — Eliminar ultima factura\n"
         "  /cancelar — Cancelar operacion\n"
         "  /ayuda — Esta ayuda",
-        parse_mode="Markdown")
+        parse_mode="Markdown", reply_markup=_kb)
 
 async def cmd_ayuda(update, context): await cmd_start(update, context)
 
