@@ -22,6 +22,24 @@ async def handle_text(update, context):
     from handlers.vencimientos import handle_text_vencimiento
     from handlers.facturas import handle_text_edit_factura
 
+    # ── Los botones fijos se atienden antes que nada ──
+    # "Asistencia" a secas cae en es_mensaje_sin_contenido y se trataria como
+    # basura --con razon: Juan escribia la palabra sola antes del parte-- asi
+    # que el boton no haria nada si no se mira primero. Y apretar un boton
+    # cierra lo que haya quedado a medias: es la salida que le faltaba.
+    from handlers.teclado import preparar
+    _boton = preparar(context.user_data, update.message.text)
+    if _boton:
+        from handlers.horometro_h import atender_boton
+        await atender_boton(update, context, _boton)
+        return
+
+    # ── Flujo guiado de horómetro en curso ──
+    if context.user_data.get("horo_state"):
+        from handlers.horometro_h import atender_paso
+        if await atender_paso(update, context):
+            return
+
     # ── Flujos vencidos: se sueltan ANTES de repartir ──
     # Un flujo a medias se queda con todo el texto que llegue. El 28-ago-2026
     # un /deposito sin cerrar se comio 12 dias de partes de Juan en silencio.

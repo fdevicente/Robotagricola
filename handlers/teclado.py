@@ -51,3 +51,18 @@ def es_boton(texto) -> bool:
 def texto_de_ayuda(boton) -> str | None:
     """Que responderle. None para los botones que abren un flujo propio."""
     return _AYUDA.get(str(boton or "").strip())
+
+
+def preparar(user_data, texto) -> str | None:
+    """Cierra lo que haya quedado a medias y devuelve el boton apretado, o None.
+
+    Los botones son la SALIDA cuando un flujo quedo abierto. Juan intentaba
+    salir escribiendo "/ cancelar" --con espacio, que Telegram no marca como
+    comando, asi que nunca ejecutaba cmd_cancelar-- y ese /deposito abierto se
+    comio 12 dias de partes en silencio. Apretar un boton ahora si lo cierra.
+    """
+    from modules.flujos import limpiar_flujos
+    if not es_boton(texto):
+        return None
+    limpiar_flujos(user_data)
+    return str(texto).strip()
