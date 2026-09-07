@@ -21,7 +21,7 @@ def maquinas_para_botones(excel_path: str | None = None,
                           tope: int = MAX_MAQUINAS) -> list:
     """Maquinas ordenadas por CUANTAS veces se les leyo el horometro.
 
-    No por fecha de la ultima lectura. Medido el 3-sep-2026 contra el Master
+    No por fecha de la ultima lectura. Medido el 7-sep-2026 contra el Master
     real: CAMION y una camioneta tienen UNA sola lectura cada una, del 10 y el
     11-ago --pinta a carga inicial de fichas, no a uso-- y por un dia de
     diferencia le ganaban el boton al TRACTOR JOHN DEERE 5425, que Juan si usa.

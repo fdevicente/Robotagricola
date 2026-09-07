@@ -9,7 +9,7 @@ OJO CON LOS TRABAJADORES: no salen solo de la hoja Personal. Medido el
 Amigo Soto") y no incluye a Richard Padilla ni a su hijo, mientras la columna
 Trabajadores de la bitacora usa los 8 nombres canonicos que el bot viene usando.
 
-Y NO SE PUEDEN METER LOS DOS. Medido el 3-sep-2026: de las 6 filas de Personal,
+Y NO SE PUEDEN METER LOS DOS. Medido el 7-sep-2026: de las 6 filas de Personal,
 5 son el nombre legal de alguien que la bitacora ya conoce por su canonico, y
 NINGUNA es gente nueva. Meter ambos le da a la IA dos nombres validos para la
 misma persona; el que elija se escribe en la hoja y parte el historial, porque

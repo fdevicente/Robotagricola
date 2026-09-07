@@ -10,7 +10,7 @@
 
 **Diseño:** `docs/superpowers/specs/2026-09-02-partes-juan-lectura-ia-design.md`
 
-> 🔄 **Este plan pasó a ser el SEGUNDO, y con menos alcance.** El 3-sep-2026, midiendo qué manda Juan de verdad, se vio que hace tres cosas y que sus **15 intentos de comando** dicen que está buscando un menú. Primero va `2026-09-03-teclado-y-horometro-guiado.md`, que se entrega solo.
+> 🔄 **Este plan pasó a ser el SEGUNDO, y con menos alcance.** El 7-sep-2026, midiendo qué manda Juan de verdad, se vio que hace tres cosas y que sus **15 intentos de comando** dicen que está buscando un menú. Primero va `2026-09-03-teclado-y-horometro-guiado.md`, que se entrega solo.
 >
 > Qué cambia acá cuando llegue el turno:
 > - **`MANTENCION` y `FICHA` salen de los destinos.** Medido: Juan mandó **cero**. El dueño las carga por `/maquinaria`, que no se toca. Quedan `BITACORA` y `HOROMETRO`.

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.11, python-telegram-bot 20+, openpyxl, pytest.
 
-**Diseño:** `docs/superpowers/specs/2026-09-02-partes-juan-lectura-ia-design.md`, sección «Revisión del 3-sep-2026».
+**Diseño:** `docs/superpowers/specs/2026-09-02-partes-juan-lectura-ia-design.md`, sección «Revisión del 7-sep-2026».
 
 ---
 
@@ -56,6 +56,10 @@ Si se trabaja en un worktree, ver las tres copias que hacen falta para que la su
 - Test: `tests/test_opciones_capataz.py`
 
 Los botones **no van escritos a mano**. Las labores cambian con la temporada —hoy es poda, en marzo es cosecha— y una lista fija envejece sin que nadie la note. Salen del propio Master.
+
+> 🔴 **EJECUTADA — y `maquinas_recientes` no sobrevivió.** La revisión midió que ordenar por *fecha de la última lectura* pone `CAMION` y una camioneta entre los primeros botones: tienen **una sola lectura cada una**, del 10 y 11-ago, que pinta a carga inicial de fichas, y por un día de diferencia le ganaban el puesto a un tractor que Juan sí usa.
+>
+> Se reemplazó por `maquinas_para_botones(excel_path)`, que ordena por **cuántas veces se le leyó el horómetro** y desempata por la más reciente. La recurrencia distingue lo que se usa de lo que se cargó una vez; la fecha no. El código bueno está en el commit `50ce536`, no en el bloque de abajo.
 
 - [ ] **Step 1: Escribir el test que falla**
 

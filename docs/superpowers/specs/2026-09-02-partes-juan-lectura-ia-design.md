@@ -19,7 +19,7 @@ Además hay dos vocabularios distintos: el prompt de `bitacora_extractor` conoce
 
 Que **cualquier cosa que haga Juan** quede anotada donde corresponde, sin que tenga que recordar un formato.
 
-## 🔄 Revisión del 3-sep-2026: primero botones, la IA solo donde hace falta
+## 🔄 Revisión del 7-sep-2026: primero botones, la IA solo donde hace falta
 
 **Se midió qué hace Juan de verdad**, sobre todo el respaldo crudo:
 
@@ -103,7 +103,7 @@ La lista es la **unión de tres fuentes**, y manda la primera:
 2. `TRABAJADORES_CONOCIDOS` y `ALIAS` de `bitacora_extractor` — trae los apodos (`pato` → `Patricio Mora`) y la regla de que `richard` a secas es el padre;
 3. la hoja `Personal`, **pero solo la gente que las dos primeras no conocen ya**.
 
-⚠️ **Ese "solo" no es un detalle.** Medido el 3-sep-2026 al implementarlo: `Personal` guarda el nombre **legal completo** y la bitácora el **canónico**, así que meter las dos listas daba **15 nombres para 10 personas** (`Felicito Amigo` + `Felicito Amigo Soto`, `Patricio Mora` + `Luis Patricio Mora Amigo`, …). De las 6 filas de `Personal`, **5 eran duplicados y ninguna era gente nueva**.
+⚠️ **Ese "solo" no es un detalle.** Medido el 7-sep-2026 al implementarlo: `Personal` guarda el nombre **legal completo** y la bitácora el **canónico**, así que meter las dos listas daba **15 nombres para 10 personas** (`Felicito Amigo` + `Felicito Amigo Soto`, `Patricio Mora` + `Luis Patricio Mora Amigo`, …). De las 6 filas de `Personal`, **5 eran duplicados y ninguna era gente nueva**.
 
 Y no es cosmético: el contexto va al prompt **y** al juez, así que la IA recibe dos nombres válidos para la misma persona, el juez le aprueba cualquiera de los dos, y el que salga se escribe en la columna `Trabajadores`. `bitacora_asistencia` solo cuenta jornadas de los canónicos, o sea que un nombre legal escrito ahí **desaparece de las jornadas-hombre**.
 

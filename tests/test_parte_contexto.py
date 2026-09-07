@@ -99,7 +99,7 @@ def test_los_canonicos_van_antes_que_los_nombres_nuevos_de_personal(tmp_path):
 def test_personal_no_duplica_a_alguien_que_ya_conocemos(tmp_path):
     """Personal guarda el nombre LEGAL y la bitacora el canonico.
 
-    Medido el 3-sep-2026 sobre el Master real: de las 6 filas de Personal, 5 son
+    Medido el 7-sep-2026 sobre el Master real: de las 6 filas de Personal, 5 son
     el nombre legal de alguien ya conocido. Meter los dos le da a la IA dos
     nombres para la misma persona.
     """
