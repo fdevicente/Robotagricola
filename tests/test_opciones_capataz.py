@@ -6,42 +6,65 @@ envejece sin que nadie lo note y Juan termina apretando "Otra..." siempre.
 """
 from openpyxl import Workbook
 
-from modules.opciones_capataz import labores_frecuentes, maquinas_recientes
-
-CTX = {"maquinas": [
-    {"maquina": "TRACTOR MASSEY FERGUSON 6711", "ultimo_odometro": 2057,
-     "fecha": "2026-09-01", "unidad": "h"},
-    {"maquina": "TRACTOR MASSEY FERGUSON 4292", "ultimo_odometro": 5239,
-     "fecha": "2026-09-01", "unidad": "h"},
-    {"maquina": "EXCAVADORA", "ultimo_odometro": 7240, "fecha": "2026-06-12",
-     "unidad": "h"},
-    {"maquina": "CAMIONETA RAM MODELO 1500", "ultimo_odometro": None,
-     "fecha": None, "unidad": "km"},
-]}
+from modules.opciones_capataz import labores_frecuentes, maquinas_para_botones
 
 
-def test_las_maquinas_van_de_mas_reciente_a_mas_vieja():
-    m = maquinas_recientes(CTX)
-    assert m[0] in ("TRACTOR MASSEY FERGUSON 6711", "TRACTOR MASSEY FERGUSON 4292")
-    assert m.index("EXCAVADORA") > m.index("TRACTOR MASSEY FERGUSON 6711")
+def _excel_maquinas(tmp_path):
+    """Reproduce el caso real: tractores que se usan vs fichas cargadas una vez."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Bitácora"
+    ws.append(["Fecha", "Hora", "Tipo", "Actividad", "Cultivo", "Sector",
+               "Jornadas Hombre", "Trabajadores", "Insumo", "Cantidad",
+               "Unidad", "Registro", "Registrado por", "Máquina", "Odómetro",
+               "Horas Día", "Superficie ha", "Días Cubiertos"])
+
+    def lectura(fecha, maquina, odo):
+        ws.append([fecha, "10:00", "MAQUINARIA", "Lectura de horómetro",
+                   "GENERAL", "", None, "", "", None, "", "t", "Juan Parada",
+                   maquina, odo, None, None, None])
+
+    for i in range(10):                        # el que mas se usa
+        lectura("2026-07-%02d" % (i + 1), "TRACTOR JOHN DEERE 5425", 3000 + i)
+    for i in range(5):
+        lectura("2026-08-%02d" % (i + 1), "TRACTOR MASSEY FERGUSON 6711", 2000 + i)
+    lectura("2026-09-01", "CAMION", 104000)    # UNA sola, pero la mas reciente
+    ws.append(["2026-09-02", "10:00", "LABOR", "Poda", "NOGALES", "", 1, "", "",
+               None, "", "t", "Juan Parada", "", None, None, None, None])
+    ruta = tmp_path / "maquinas.xlsx"
+    wb.save(ruta)
+    return str(ruta)
 
 
-def test_las_maquinas_sin_ninguna_lectura_van_al_final():
-    """Nunca se usaron; no pueden ocupar los primeros botones."""
-    m = maquinas_recientes(CTX)
-    assert m[-1] == "CAMIONETA RAM MODELO 1500"
+def test_manda_cuantas_veces_se_leyo_no_cuando_fue_la_ultima(tmp_path):
+    """El caso real: CAMION tiene UNA lectura del 10-ago y le ganaba el boton
+    a un tractor con 10 lecturas, por un dia de diferencia."""
+    m = maquinas_para_botones(_excel_maquinas(tmp_path))
+    assert m[0] == "TRACTOR JOHN DEERE 5425"
+    assert m.index("TRACTOR MASSEY FERGUSON 6711") < m.index("CAMION")
 
 
-def test_no_devuelve_una_pared_de_botones():
-    ctx = {"maquinas": [{"maquina": "M%d" % i, "ultimo_odometro": i,
-                         "fecha": "2026-01-%02d" % (i + 1), "unidad": "h"}
-                        for i in range(20)]}
-    assert len(maquinas_recientes(ctx)) <= 6
+def test_una_fila_sin_odometro_no_cuenta_como_lectura(tmp_path):
+    """La fila de LABOR no lleva maquina ni odometro: no puede sumar."""
+    m = maquinas_para_botones(_excel_maquinas(tmp_path))
+    assert "" not in m
+    assert len(m) == 3
 
 
-def test_sin_maquinas_devuelve_lista_vacia():
-    assert maquinas_recientes({"maquinas": []}) == []
-    assert maquinas_recientes({}) == []
+def test_no_devuelve_una_pared_de_botones(tmp_path):
+    m = maquinas_para_botones(_excel_maquinas(tmp_path), tope=2)
+    assert len(m) == 2
+
+
+def test_sin_hoja_bitacora_devuelve_lista_vacia(tmp_path):
+    wb = Workbook()
+    ruta = tmp_path / "vacio.xlsx"
+    wb.save(ruta)
+    assert maquinas_para_botones(str(ruta)) == []
+
+
+def test_un_excel_ilegible_no_revienta_las_maquinas(tmp_path):
+    assert maquinas_para_botones(str(tmp_path / "no_existe.xlsx")) == []
 
 
 def _excel(tmp_path):

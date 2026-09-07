@@ -26,14 +26,14 @@ async def atender_boton(update, context, boton):
         return
     if boton != BOTON_HOROMETRO:
         return
-    from modules.opciones_capataz import maquinas_recientes
+    from modules.opciones_capataz import maquinas_para_botones
     from modules.parte_contexto import construir
     ctx = await asyncio.to_thread(construir)
     context.user_data["horo_ctx"] = ctx
     iniciar(context.user_data)
     await update.message.reply_text(
         "🚜 ¿Qué *máquina*?", parse_mode="Markdown",
-        reply_markup=_menu(maquinas_recientes(ctx)))
+        reply_markup=_menu(await asyncio.to_thread(maquinas_para_botones)))
 
 
 async def atender_paso(update, context) -> bool:
