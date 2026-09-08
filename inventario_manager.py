@@ -103,28 +103,36 @@ def agregar_stock(producto: str, cantidad: float, categoria: str = "Otro",
 
 def registrar_uso(producto: str, cantidad: float, cultivo: str,
                   sector: str = "", responsable: str = "",
-                  observaciones: str = "") -> dict:
-    """Registra uso de un producto y descuenta del inventario."""
+                  observaciones: str = "", fecha: str = "",
+                  unidad: str = "") -> dict:
+    """Registra uso de un producto y descuenta del inventario.
+
+    `fecha` es la del TRABAJO, no la de hoy: Juan reporta las aplicaciones days
+    despues y con `date.today()` quedaban todas con la fecha en que las mando.
+    `unidad` la que diga el parte ("5,4 kilos"): la del inventario puede no
+    coincidir, y rotular kilos de fungicida como litros no es un detalle.
+    Las dos caen a lo de antes si no vienen.
+    """
     wb = _open_wb()
     ws_inv = _ensure_inventario(wb)
     ws_app = _ensure_aplicaciones(wb)
 
     row_idx = _find_producto(ws_inv, producto)
-    hoy = date.today().strftime("%Y-%m-%d")
+    cuando = (fecha or "")[:10] or date.today().strftime("%Y-%m-%d")
 
     if row_idx:
         stock_actual = float(ws_inv.cell(row=row_idx, column=4).value or 0)
-        unidad = ws_inv.cell(row=row_idx, column=3).value or "L"
+        unidad = unidad or ws_inv.cell(row=row_idx, column=3).value or "L"
         nuevo_stock = stock_actual - cantidad
         ws_inv.cell(row=row_idx, column=4).value = nuevo_stock
-        ws_inv.cell(row=row_idx, column=7).value = hoy
+        ws_inv.cell(row=row_idx, column=7).value = cuando
     else:
-        unidad = "L"
+        unidad = unidad or "L"
         nuevo_stock = -cantidad
-        ws_inv.append([producto, "Otro", unidad, nuevo_stock, 0, "", hoy])
+        ws_inv.append([producto, "Otro", unidad, nuevo_stock, 0, "", cuando])
 
     ws_app.append([
-        hoy, producto, cantidad, unidad, cultivo,
+        cuando, producto, cantidad, unidad, cultivo,
         sector, responsable, observaciones
     ])
 

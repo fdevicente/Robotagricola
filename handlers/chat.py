@@ -69,6 +69,15 @@ async def handle_text(update, context):
     if await handle_text_edit_factura(update, context):
         return
 
+    # ── Aplicaciones: producto, dosis y cuartel ──
+    # Va ANTES del portón de maquinaria: medido sobre los 15 partes reales de
+    # Juan, ese portón se llevaba 2 por delante (traen números y palabras que
+    # le parecen máquina). De los 15 que mandó entre junio y agosto solo 2
+    # quedaron anotados; los otros 11 hubo que recuperarlos desde su chat.
+    from handlers.aplicaciones import procesar_aplicacion
+    if await procesar_aplicacion(update, context):
+        return
+
     # ── Maquinaria: horómetros, mantenciones y fichas ──
     # Va ANTES de la bitácora automática: "al 5085 le cambiaron aceite" es una
     # mantención, no una labor del día.
