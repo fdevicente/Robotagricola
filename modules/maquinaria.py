@@ -52,7 +52,10 @@ def _sin_tildes(s: str) -> str:
 
 def norm_maquina(nombre: str) -> str:
     """Nombre canónico de la máquina, tolerando cómo la escriba Juan."""
-    t = " ".join(_sin_tildes(nombre).split())
+    # Juan mete barras al dictar: "Tractor /massey ferguson 6711". Sin limpiarlas
+    # el nombre completo no calza y la deteccion se cae al "TRACTOR" generico.
+    t = re.sub(r"[/\\|,;]+", " ", _sin_tildes(nombre))
+    t = " ".join(t.split())
     t = t.replace("JHON", "JOHN").replace("DEER ", "DEERE ")
     t = re.sub(r"\bJD\b", "JOHN DEERE", t)
     t = re.sub(r"\bMF\b", "MASSEY FERGUSON", t)
@@ -349,8 +352,14 @@ def _a_float(crudo: str) -> float | None:
         # el separador decimal es el que está más a la derecha
         s = (s.replace(".", "").replace(",", ".")
              if s.rfind(",") > s.rfind(".") else s.replace(",", ""))
+    elif "," in s and all(len(p) == 3 for p in s.split(",")[1:]):
+        # 2,039 son dos mil treinta y nueve. Juan escribe la coma como
+        # separador de miles y esto se leia 2.039: un error de MIL veces que
+        # ademas descuadra las horas de todas las lecturas siguientes de esa
+        # maquina, porque se calculan restando contra la anterior.
+        s = s.replace(",", "")
     elif "," in s:
-        s = s.replace(",", ".")
+        s = s.replace(",", ".")         # 7240,7 si es decimal
     elif s.count(".") >= 1 and all(len(p) == 3 for p in s.split(".")[1:]):
         s = s.replace(".", "")          # 3.166 son tres mil, no 3,166
     try:
