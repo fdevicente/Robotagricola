@@ -102,3 +102,57 @@ def test_la_misma_labor_con_otra_grafia_no_se_cuenta_dos_veces(tmp_path):
 
 def test_un_excel_ilegible_no_revienta(tmp_path):
     assert labores_frecuentes(str(tmp_path / "no_existe.xlsx")) == []
+
+
+def _excel_fechas_mezcladas(tmp_path):
+    """La columna Fecha guarda LAS DOS formas: datetime en la mayoria de las
+    filas y la cadena '2026-05-05' en unas 178 del Master real. Una fecha
+    escrita a mano en dd/mm/aaaa entra por el mismo agujero."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Bitácora"
+    ws.append(["Fecha", "Hora", "Tipo", "Actividad", "Cultivo", "Sector",
+               "Jornadas Hombre", "Trabajadores", "Insumo", "Cantidad",
+               "Unidad", "Registro", "Registrado por", "Máquina", "Odómetro",
+               "Horas Día", "Superficie ha", "Días Cubiertos"])
+
+    def lectura(fecha, maquina, odo):
+        ws.append([fecha, "10:00", "MAQUINARIA", "Lectura de horómetro",
+                   "GENERAL", "", None, "", "", None, "", "t", "Juan Parada",
+                   maquina, odo, None, None, None])
+
+    # Dos maquinas con EL MISMO numero de lecturas: manda el desempate.
+    lectura("2026-04-01", "TRACTOR RECIENTE", 100)
+    lectura("05/09/2026", "TRACTOR RECIENTE", 110)     # 5-sep, escrita a mano
+    lectura("2026-04-01", "TRACTOR ANTIGUO", 200)
+    lectura("2026-05-05", "TRACTOR ANTIGUO", 210)      # 5-may, cadena ISO
+    ruta = tmp_path / "fechas.xlsx"
+    wb.save(ruta)
+    return str(ruta)
+
+
+def test_una_fecha_escrita_a_mano_no_desordena_el_desempate(tmp_path):
+    """Comparadas como TEXTO, '2026-05-05' > '05/09/2026' y el tractor de mayo
+    le gana el boton al de septiembre. Hay que comparar fechas, no cadenas."""
+    m = maquinas_para_botones(_excel_fechas_mezcladas(tmp_path))
+    assert m.index("TRACTOR RECIENTE") < m.index("TRACTOR ANTIGUO")
+
+
+def test_la_misma_labor_con_doble_espacio_o_sin_tilde_es_una_sola(tmp_path):
+    """`.lower()` solo no basta: 'Poda  Nogales' y 'Aplicacion herbicida' se
+    cuentan aparte y se comen dos botones de los seis."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Bitácora"
+    ws.append(["Fecha", "Hora", "Tipo", "Actividad"])
+    for _ in range(5):
+        ws.append(["2026-08-20", "10:00", "LABOR", "Poda nogales"])
+    ws.append(["2026-08-20", "10:00", "LABOR", "Poda  nogales"])   # doble espacio
+    for _ in range(3):
+        ws.append(["2026-08-20", "10:00", "LABOR", "Aplicación herbicida"])
+    ws.append(["2026-08-20", "10:00", "LABOR", "Aplicacion herbicida"])  # sin tilde
+    ruta = tmp_path / "labores.xlsx"
+    wb.save(ruta)
+
+    l = labores_frecuentes(str(ruta))
+    assert l == ["Poda nogales", "Aplicación herbicida"]

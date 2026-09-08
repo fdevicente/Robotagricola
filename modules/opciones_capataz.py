@@ -17,6 +17,30 @@ BITACORA_SHEET = "Bitácora"
 _NO_ES_LABOR = {"lectura de horómetro", "lectura de horometro"}
 
 
+def _fecha_orden(valor) -> str:
+    """La fecha como 'aaaa-mm-dd' para poder ordenarla, o '' si no se entiende.
+
+    La columna Fecha de la bitacora guarda LAS DOS formas: datetime en la
+    mayoria de las filas y la cadena ISO en unas 178. Comparadas como texto
+    salen bien de casualidad, porque hoy todas son ISO; una escrita a mano como
+    '05/09/2026' se ordenaria antes que '2026-05-05' y en silencio. Mismo
+    criterio que bitacora_manager.listar_bitacora.
+    """
+    from datetime import date, datetime
+    if isinstance(valor, (datetime, date)):
+        return valor.strftime("%Y-%m-%d")
+    txt = str(valor or "").strip()
+    if not txt:
+        return ""
+    for molde in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(txt[:10], molde).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    logger.debug("opciones_capataz: fecha que no supe leer: %r", valor)
+    return ""
+
+
 def maquinas_para_botones(excel_path: str | None = None,
                           tope: int = MAX_MAQUINAS) -> list:
     """Maquinas ordenadas por CUANTAS veces se les leyo el horometro.
@@ -53,7 +77,7 @@ def maquinas_para_botones(excel_path: str | None = None,
                 if not maq or row[i_odo] in (None, ""):
                     continue                    # sin lectura no cuenta
                 cuenta[maq] += 1
-                fecha = str(row[0] or "")
+                fecha = _fecha_orden(row[0])
                 if fecha > ultima.get(maq, ""):
                     ultima[maq] = fecha
         finally:
@@ -73,6 +97,7 @@ def labores_frecuentes(excel_path: str | None = None,
     from openpyxl import load_workbook
 
     from config import EXCEL_PATH
+    from modules.parte_contexto import _clave
     ruta = excel_path or EXCEL_PATH
     cuenta, grafia = Counter(), {}
     try:
@@ -84,7 +109,10 @@ def labores_frecuentes(excel_path: str | None = None,
                 if not row or len(row) < 4 or not row[3]:
                     continue
                 act = str(row[3]).strip()
-                clave = act.lower()
+                # Sin tildes y con los espacios colapsados: "Poda  nogales" y
+                # "Aplicacion herbicida" son la misma labor, y contarlas aparte
+                # se come dos de los seis botones. Igual que parte_contexto.
+                clave = _clave(act)
                 if clave in _NO_ES_LABOR:
                     continue
                 cuenta[clave] += 1
