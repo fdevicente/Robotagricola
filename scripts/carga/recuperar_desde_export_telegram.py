@@ -38,6 +38,15 @@ QUIEN = "Juan Parada"
 # Solo los que `parsear_asistencia` lee ENTEROS.
 DIAS = {
     "2026-08-14": "2026-08-14",
+    # Los seis que venian sin dos puntos. Se pudieron leer desde que
+    # parsear_asistencia aprendio a partir la linea por el nombre del trabajador
+    # y, para la cuadrilla de temporada, por las actividades del propio mensaje.
+    "2026-08-25": "2026-08-25",
+    "2026-08-26": "2026-08-26",
+    "2026-08-27": "2026-08-27",
+    "2026-08-28": "2026-08-28",
+    "2026-08-31": "2026-08-31",
+    "2026-09-01": "2026-09-01",
 }
 
 # ⚠️ NO agregar aqui "2028-07-28". Ese parte trae el ano tecleado mal, pero el
@@ -182,10 +191,20 @@ def main(simular):
     repetidas = _ya_estan(filas) if filas else []
     if repetidas:
         print()
-        print("NO SE ESCRIBE NADA: %d fila(s) ya estan en el Master:" % len(repetidas))
+        print("YA ESTABAN, se saltan: %d fila(s)" % len(repetidas))
         for f in repetidas:
             print("   %s  %s  %s" % (f["fecha"], f["actividad"],
                                      ", ".join(f["trabajadores"])))
+        clave = {(f["fecha"], f["actividad"], ", ".join(f["trabajadores"]))
+                 for f in repetidas}
+        filas = [f for f in filas
+                 if (f["fecha"], f["actividad"], ", ".join(f["trabajadores"]))
+                 not in clave]
+        print()
+        print("quedan %d filas nuevas" % len(filas))
+    if not filas:
+        print()
+        print("nada nuevo que escribir.")
         return
 
     if simular:

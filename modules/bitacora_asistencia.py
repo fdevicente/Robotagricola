@@ -44,6 +44,18 @@ _TOKENS = {n: set(_sin_tildes(n).split()) for n in TRABAJADORES_CONOCIDOS}
 _TOKENS.setdefault("Javier Gonzalez", {"javier", "gonzalez"})
 
 
+def _token(p: str) -> str:
+    """Token comparable. La 'z' final se pliega a 's'.
+
+    En Chile el mismo apellido se escribe de las dos formas y Juan alterna:
+    "Javier Gonzales" y "Javier Gonzalez" son la misma persona. Sin esto el
+    calce estricto falla y se crea un trabajador duplicado, que despues
+    desaparece de las jornadas porque nadie mas lo escribe asi.
+    """
+    p = _sin_tildes(p).strip(".,;:")
+    return p[:-1] + "s" if p.endswith("z") else p
+
+
 def canonico_por_nombre_completo(nombre: str):
     """Canonico solo si TODOS sus tokens estan en `nombre`. Sin calce por pila.
 
@@ -57,8 +69,9 @@ def canonico_por_nombre_completo(nombre: str):
     calzando con cualquier "Jorge Lo Que Sea". Eso es del dato, no del calce.
     """
     txt = _sin_tildes(str(nombre or ""))
-    sueltas = {p for p in re.split(r"[^a-z]+", txt) if p}
-    completos = [n for n, toks in _TOKENS.items() if toks and toks <= sueltas]
+    sueltas = {_token(p) for p in re.split(r"[^a-z]+", txt) if p}
+    completos = [n for n, toks in _TOKENS.items()
+                 if toks and {_token(t) for t in toks} <= sueltas]
     return max(completos, key=lambda n: len(_TOKENS[n])) if completos else None
 
 
@@ -100,20 +113,117 @@ def _clave(act: str) -> str:
     return _sin_tildes(_norm_actividad(act)).strip()
 
 
+def _palabras_del_nombre(palabras, canonico):
+    """Cuántas palabras del inicio hacen falta para cubrir el nombre canónico."""
+    faltan = {_token(t) for t in (_TOKENS.get(canonico) or ())}
+    if not faltan:
+        return 0
+    for i, p in enumerate(palabras, start=1):
+        faltan.discard(_token(p))
+        if not faltan:
+            return i
+    return 0
+
+
+def _partir_por_trabajador_conocido(linea):
+    """('Canónico', 'actividad') si la línea empieza con alguien que conocemos.
+
+    Se usa el calce ESTRICTO por tokens, no `_canonico`: su calce por nombre de
+    pila convertiría a Juan Ríos, Juan cóndori, Juan jaque y Juan quiroz --cuatro
+    temporeros distintos-- en Juan Parada, el jefe de campo.
+    """
+    canonico = canonico_por_nombre_completo(linea)
+    if not canonico:
+        return None
+    palabras = linea.split()
+    n = _palabras_del_nombre(palabras, canonico)
+    if not n or n >= len(palabras):
+        return None
+    return canonico, " ".join(palabras[n:])
+
+
+def _partir_por_actividad(linea, catalogo):
+    """[(nombre, actividad), ...] partiendo por las actividades ya vistas.
+
+    Para la gente que no conocemos --la cuadrilla de temporada-- la señal es que
+    LAS ACTIVIDADES SE REPITEN: las líneas de gente conocida dan el catálogo del
+    propio mensaje, y estas terminan en una de ellas.
+
+    Devuelve varios pares si la línea trae más de una persona: el 1-sep-2026 a
+    Juan se le fue un salto de línea y quedaron dos pegadas.
+    """
+    if not catalogo:
+        return []
+    plano = _sin_tildes(linea)
+    hallados = []
+    for act in catalogo:
+        objetivo = _sin_tildes(act)
+        if not objetivo:
+            continue
+        desde = 0
+        while True:
+            i = plano.find(objetivo, desde)
+            if i < 0:
+                break
+            hallados.append((i, i + len(objetivo), act))
+            desde = i + 1
+    if not hallados:
+        return []
+    # Gana la actividad más larga que empiece antes: "aplicación herbicida
+    # nogales" y no el "aplicación herbicida" que lleva dentro.
+    hallados.sort(key=lambda h: (h[0], -h[1]))
+    limpio, fin_previo = [], -1
+    for ini, fin, act in hallados:
+        if ini >= fin_previo:
+            limpio.append((ini, fin, act))
+            fin_previo = fin
+    pares, cursor = [], 0
+    for ini, fin, act in limpio:
+        nombre = linea[cursor:ini].strip(" .,;:-")
+        if nombre:
+            pares.append((nombre, act))
+        cursor = fin
+    return pares
+
+
 def parsear_asistencia(texto: str):
     """Devuelve [{actividad, trabajadores, jornadas_hombre}] o None si no aplica.
 
-    Solo aplica cuando hay 2+ líneas 'Trabajador : actividad'.
+    Lee tanto 'Trabajador : actividad' como 'Trabajador actividad' a secas. Juan
+    dejó de poner los dos puntos y las líneas sin ellos se descartaban EN
+    SILENCIO: del parte del 26-ago-2026 se leían 2 jornadas de 7, y de otros
+    cinco partes ninguna. Eran 67 jornadas-hombre.
     """
-    grupos = {}   # clave → {"actividad": str, "trabajadores": [..]}
+    pares, pendientes = [], []
     for linea in (texto or "").splitlines():
+        if not linea.strip():
+            continue
         m = _LINEA.match(linea)
-        if not m:
+        if m:
+            trabajador = _canonico(m.group(1))
+            if trabajador:
+                pares.append((trabajador, m.group(2)))
             continue
-        crudo, actividad = m.group(1), m.group(2)
-        trabajador = _canonico(crudo)
-        if not trabajador:
-            continue
+        if fecha_de_linea(linea):
+            continue                       # el encabezado del parte
+        conocido = _partir_por_trabajador_conocido(linea)
+        if conocido:
+            pares.append(conocido)
+        else:
+            pendientes.append(linea)
+
+    # El catálogo sale de las líneas ya resueltas, del propio mensaje.
+    catalogo = []
+    for _, act in pares:
+        a = _norm_actividad(act)
+        if a and a not in catalogo:
+            catalogo.append(a)
+    for linea in pendientes:
+        for nombre, act in _partir_por_actividad(linea, catalogo):
+            pares.append((nombre.title(), act))
+
+    grupos = {}   # clave → {"actividad": str, "trabajadores": [..]}
+    for trabajador, actividad in pares:
         act = _norm_actividad(actividad)
         if not act:
             continue
