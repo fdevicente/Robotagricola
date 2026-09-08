@@ -118,3 +118,100 @@ def test_ningun_flujo_del_proyecto_queda_sin_registrar():
             usadas |= set(re.findall(r'user_data\.get\("(\w+_state)"\)', fh.read()))
     faltan = usadas - set(CLAVES_ESTADO)
     assert not faltan, "flujos sin registrar en modules/flujos.py: %s" % faltan
+
+
+# ---------------------------------------------------------------------------
+# El aviso tiene que ESPERAR la respuesta.
+#
+# Medido en el telefono de la cuadrilla el 8-sep-2026: el bot mando el aviso
+# ("La ultima que tengo es 2.057, y me pusiste 1.950. ¿Esta bien?") y en el
+# mismo aliento pregunto el termino, porque el paso ya habia avanzado. Cualquier
+# cosa que contestara --"no", "me equivoque"-- caia en el paso del termino y le
+# respondia "Necesito el numero del horometro": lo retaba por contestar la
+# pregunta que le acababan de hacer, y el 1.950 quedaba sin forma de corregirse.
+# Es la misma forma del bug de "/ cancelar": una puerta que parece abierta.
+# ---------------------------------------------------------------------------
+
+
+def _hasta_el_aviso():
+    """Deja el flujo justo despues de un inicio que no calza."""
+    ud = {}
+    iniciar(ud)
+    avanzar(ud, "TRACTOR MASSEY FERGUSON 4292", CTX)
+    r = avanzar(ud, "5137", CTX)               # la ultima es 5239
+    return ud, r
+
+
+def test_un_inicio_raro_no_pregunta_el_termino_todavia():
+    from handlers.horometro import PASOS as P
+    ud, r = _hasta_el_aviso()
+    assert ud["horo_state"] == P.CONFIRMA
+    assert "termin" not in r["mensaje"].lower()
+    assert "5.239" in r["mensaje"] and "5.137" in r["mensaje"]
+
+
+def test_decir_que_si_da_por_bueno_el_inicio_y_sigue():
+    from handlers.horometro import BOTON_SI
+    ud, _ = _hasta_el_aviso()
+    r = avanzar(ud, BOTON_SI, CTX)
+    assert r["ok"] is True
+    assert ud["horo_state"] == PASOS.TERMINO
+    assert ud["horo_data"]["inicio"] == 5137
+    assert "termin" in r["mensaje"].lower()
+
+
+def test_decir_que_no_vuelve_a_pedir_el_inicio():
+    from handlers.horometro import BOTON_NO
+    ud, _ = _hasta_el_aviso()
+    r = avanzar(ud, BOTON_NO, CTX)
+    assert r["ok"] is True
+    assert ud["horo_state"] == PASOS.INICIO
+    assert "parti" in r["mensaje"].lower()
+
+
+def test_un_no_escrito_a_mano_tambien_vale():
+    """Juan escribe, no siempre aprieta. 'no' a secas es la respuesta natural."""
+    ud, _ = _hasta_el_aviso()
+    r = avanzar(ud, "no", CTX)
+    assert r["ok"] is True
+    assert ud["horo_state"] == PASOS.INICIO
+
+
+def test_un_si_escrito_sin_tilde_tambien_vale():
+    ud, _ = _hasta_el_aviso()
+    r = avanzar(ud, "si", CTX)
+    assert r["ok"] is True                     # con el bug, "si" no era un numero
+    assert ud["horo_state"] == PASOS.TERMINO
+    assert ud["horo_data"]["inicio"] == 5137   # se dio por bueno el que puso
+
+
+def test_reteclear_el_numero_corrige_el_inicio_y_no_es_el_termino():
+    """Si contesta con un numero esta arreglando el inicio que ve citado, no
+    adelantando el termino. Tomarlo como termino escribiria un dato que nadie
+    pidio; tomarlo como inicio se puede volver a corregir."""
+    ud, _ = _hasta_el_aviso()
+    r = avanzar(ud, "5239", CTX)               # ahora si calza con la ultima
+    assert ud["horo_data"]["inicio"] == 5239
+    assert ud["horo_state"] == PASOS.TERMINO
+    assert r["ok"] is True
+
+
+def test_una_respuesta_que_no_entiende_no_se_come_como_termino():
+    """El defecto exacto de la captura: cualquier cosa que no fuera un numero
+    caia en el paso del termino y le respondia "Necesito el numero del
+    horometro", retandolo por contestar lo que le acababan de preguntar."""
+    ud, _ = _hasta_el_aviso()
+    r = avanzar(ud, "ehh", CTX)
+    assert r["ok"] is False
+    assert ud["horo_state"] != PASOS.TERMINO
+    assert "horómetro" not in r["mensaje"].lower()
+
+
+def test_un_inicio_que_calza_no_pregunta_nada():
+    """No hay que agregarle un paso al camino que ya andaba bien."""
+    ud = {}
+    iniciar(ud)
+    avanzar(ud, "TRACTOR MASSEY FERGUSON 4292", CTX)
+    r = avanzar(ud, "5239", CTX)
+    assert ud["horo_state"] == PASOS.TERMINO
+    assert "termin" in r["mensaje"].lower()

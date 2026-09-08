@@ -44,12 +44,14 @@ async def atender_paso(update, context) -> bool:
         await update.message.reply_text(r["mensaje"])
         return True
 
-    if r.get("aviso"):
-        await update.message.reply_text(r["aviso"], parse_mode="Markdown")
-
     if r["campos"] is None:
         teclado = teclado_capataz()
-        if context.user_data.get("horo_state") == PASOS.LABOR:
+        if r.get("opciones"):
+            # Un paso que pregunta trae sus propias respuestas. Sin "Otra…":
+            # aca las opciones son todas las que hay.
+            teclado = ReplyKeyboardMarkup([[o] for o in r["opciones"]],
+                                          resize_keyboard=True, is_persistent=True)
+        elif context.user_data.get("horo_state") == PASOS.LABOR:
             from modules.opciones_capataz import labores_frecuentes
             teclado = _menu(await asyncio.to_thread(labores_frecuentes))
         await update.message.reply_text(r["mensaje"], parse_mode="Markdown",
