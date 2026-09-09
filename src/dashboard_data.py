@@ -4,7 +4,7 @@ dashboard_data.py — Extrae datos del Excel y archivos de exportación para el 
 import os
 import logging
 from datetime import date, datetime, timedelta
-from collections import defaultdict
+from collections import Counter, defaultdict
 from openpyxl import load_workbook
 from config import EXCEL_PATH
 
@@ -51,16 +51,23 @@ def _safe_float(val):
 
 # ─── FACTURAS ───────────────────────────────────────────────
 
-def get_facturas_summary():
-    """Resumen general de facturas."""
-    wb = _open_wb()
+def get_facturas_summary(path=None):
+    """Resumen general de facturas.
+
+    Los contadores cuentan FACTURAS, no lineas: una factura de tres items es
+    una sola. Y lo marcado `NN` --lo que el dueño decidio no pagar-- se informa
+    aparte en `no_se_pagan`, no como deuda. Medido contra el Master el
+    9-sep-2026, la tarjeta decia "19 vencidas + 14 por pagar" cuando habia 18
+    facturas por pagar: contaba lineas y sumaba 10 facturas viejas ya
+    descartadas ($3.425.211).
+
+    Los MONTOS siguen sumandose por item, que es como estan en la hoja.
+    """
+    wb = _open_wb(path)
     ws = wb["Facturas"]
-    total_facturas = 0
     total_monto = 0
-    pagadas = 0
-    vencidas = 0
-    por_pagar = 0
     hoy = date.today()
+    estados = {}                       # (proveedor, nº) -> estado de la factura
     por_mes = defaultdict(float)
     por_proveedor = defaultdict(float)
     por_tipo_doc = defaultdict(int)
@@ -68,7 +75,6 @@ def get_facturas_summary():
     for row in ws.iter_rows(min_row=2, values_only=True):
         if not row[0]:
             continue
-        total_facturas += 1
         monto = _safe_float(row[14])  # col O = Monto/TOTAL
         total_monto += monto
         fecha_emision = _parse_date(row[0])
@@ -76,6 +82,7 @@ def get_facturas_summary():
         fecha_pago = str(row[2] or "") if row[2] else ""
         proveedor = str(row[3] or "Sin proveedor")
         tipo_doc = str(row[5] or "Factura")
+        nota = str(row[19] or "") if len(row) > 19 else ""
 
         if fecha_emision:
             key = f"{fecha_emision.year}-{fecha_emision.month:02d}"
@@ -85,22 +92,34 @@ def get_facturas_summary():
         por_tipo_doc[tipo_doc] += 1
 
         if fecha_pago and fecha_pago.strip():
-            pagadas += 1
+            estado = "pagadas"
+        elif "NN" in nota.upper():
+            estado = "no_se_pagan"
         elif fecha_venc and fecha_venc < hoy:
-            vencidas += 1
+            estado = "vencidas"
         else:
-            por_pagar += 1
+            estado = "por_pagar"
+
+        # Una factura con lineas en distinto estado se cuenta por la peor: si
+        # una linea sigue sin pagar, la factura no esta pagada.
+        clave = (proveedor.strip().upper(), str(row[6] or "").strip())
+        peor = ("pagadas", "no_se_pagan", "por_pagar", "vencidas")
+        previo = estados.get(clave)
+        if previo is None or peor.index(estado) > peor.index(previo):
+            estados[clave] = estado
 
     wb.close()
 
+    conteo = Counter(estados.values())
     top_proveedores = sorted(por_proveedor.items(), key=lambda x: x[1], reverse=True)[:10]
 
     return {
-        "total_facturas": total_facturas,
+        "total_facturas": len(estados),
         "total_monto": total_monto,
-        "pagadas": pagadas,
-        "vencidas": vencidas,
-        "por_pagar": por_pagar,
+        "pagadas": conteo["pagadas"],
+        "vencidas": conteo["vencidas"],
+        "por_pagar": conteo["por_pagar"],
+        "no_se_pagan": conteo["no_se_pagan"],
         "por_mes": dict(sorted(por_mes.items())),
         "top_proveedores": [{"nombre": n, "monto": m} for n, m in top_proveedores],
         "por_tipo_doc": dict(por_tipo_doc),
@@ -127,9 +146,13 @@ def get_facturas_detalle(filtro: str = "todas"):
         glosa = str(row[7] or "")
         monto = _safe_float(row[14])
 
-        # Determinar estado
+        # Determinar estado. `NN` es lo que el dueño decidio no pagar: no es
+        # deuda, asi que no puede salir bajo "vencida" ni "por pagar" — si
+        # saliera, la lista contradiria a la tarjeta que la abre.
         if fecha_pago:
             estado = "pagada"
+        elif "NN" in (str(row[19] or "") if len(row) > 19 else "").upper():
+            estado = "no_se_paga"
         elif fecha_venc and fecha_venc < hoy:
             estado = "vencida"
         else:
