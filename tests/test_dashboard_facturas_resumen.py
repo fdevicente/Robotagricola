@@ -91,3 +91,32 @@ def test_el_monto_total_sigue_sumando_los_items(tmp_path):
     """El total en plata se suma por ITEM: cambiar el conteo no puede moverlo."""
     r = get_facturas_summary(_master(tmp_path))
     assert r["total_monto"] == 1000 + 2000 + 3000 + 500 + 700 + 900 + 404600 + 238000
+
+
+# ── La lista de facturas: las NN quedan ocultas ────────────────────────────
+# El dueño pidió esconderlas, no borrarlas: las filas se quedan en la hoja
+# porque `Conciliaciones` guarda números de fila y borrarlas correría todas las
+# referencias. Ocultarlas es un problema de PANTALLA, no de datos.
+
+from dashboard_data import get_facturas_detalle   # noqa: E402
+
+
+def test_las_NN_no_salen_en_todas(tmp_path):
+    """'Todas' es lo que el dueño mira: no puede traerle lo que descartó."""
+    filas = get_facturas_detalle("todas", _master(tmp_path))
+    assert all("NN" not in (f.get("nota") or "").upper() for f in filas)
+    assert len(filas) == 6                 # 3 pagadas + 2 vencidas + 1 por pagar
+
+
+def test_las_NN_no_salen_como_vencidas(tmp_path):
+    """Vencen igual: si el estado no las apartara, saldrían acá."""
+    assert get_facturas_detalle("vencida", _master(tmp_path)) != []
+    for f in get_facturas_detalle("vencida", _master(tmp_path)):
+        assert f["proveedor"] != "CONTRERAS"
+
+
+def test_se_pueden_pedir_a_proposito(tmp_path):
+    """Ocultas no es borradas: hay que poder ir a verlas."""
+    filas = get_facturas_detalle("no_se_paga", _master(tmp_path))
+    assert len(filas) == 2
+    assert {f["proveedor"] for f in filas} == {"CONTRERAS"}

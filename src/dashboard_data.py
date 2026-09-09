@@ -126,9 +126,15 @@ def get_facturas_summary(path=None):
     }
 
 
-def get_facturas_detalle(filtro: str = "todas"):
-    """Retorna filas detalladas de facturas filtradas por estado."""
-    wb = _open_wb()
+def get_facturas_detalle(filtro: str = "todas", path=None):
+    """Retorna filas detalladas de facturas filtradas por estado.
+
+    Lo marcado `NN` --lo que el dueño decidio no pagar-- queda OCULTO: no sale
+    ni en "todas". Ocultas no es borradas; las filas siguen en la hoja porque
+    `Conciliaciones` guarda numeros de fila de `Facturas` y borrarlas correria
+    todas las referencias. Para verlas hay que pedirlas: `filtro="no_se_paga"`.
+    """
+    wb = _open_wb(path)
     ws = wb["Facturas"]
     hoy = date.today()
     filas = []
@@ -158,6 +164,10 @@ def get_facturas_detalle(filtro: str = "todas"):
         else:
             estado = "por_pagar"
 
+        # "todas" son todas las que SON deuda o ya se pagaron. Las descartadas
+        # solo aparecen si se piden por su nombre.
+        if estado == "no_se_paga" and filtro != "no_se_paga":
+            continue
         if filtro != "todas" and estado != filtro:
             continue
 
