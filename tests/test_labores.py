@@ -305,13 +305,12 @@ def test_el_costo_por_jornada_sale_del_sueldo_dividido_las_jornadas(tmp_path):
         [("Felicito Amigo Soto", "9.850.887-2")],
         [("2026-06-20", "TEF  9850887-2 FELICITO AMIGO", 900000,
           "MANO DE OBRA PLANTA")],
-        [_fila("2026-06-10", "Poda nogales", 1, "Felicito Amigo"),
-         _fila("2026-06-11", "Poda nogales", 1, "Felicito Amigo"),
-         _fila("2026-06-12", "Poda nogales", 1, "Felicito Amigo")])
+        [_fila("2026-06-%02d" % d, "Poda nogales", 1, "Felicito Amigo")
+         for d in range(10, 16)])          # 6 jornadas: por encima del mínimo
     f = {x["persona"]: x for x in costo_por_trabajador(path=ruta)}["Felicito Amigo Soto"]
-    assert f["jornadas"] == 3
+    assert f["jornadas"] == 6
     assert f["pagado"] == 900000
-    assert f["costo_jornada"] == 300000
+    assert f["costo_jornada"] == 150000
 
 
 def test_un_mes_sin_pagos_da_sin_datos_no_cero(tmp_path):
