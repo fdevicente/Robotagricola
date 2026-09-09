@@ -181,3 +181,102 @@ def resumen_labores(desde=None, hasta=None, path=None) -> list:
             "etiquetas": sorted(d["_etq"]),
         })
     return sorted(salida, key=lambda x: -x["jornadas"])
+
+
+# ── Lo que se pagó ─────────────────────────────────────────────────────────
+
+PERSONAL_SHEET = "Personal"
+BANCO_SHEET = "Cuenta Banco"
+CAT_TEMPORAL = "MANO DE OBRA TEMPORAL"
+
+# Lo del dueño: su remuneracion y su sociedad. Lo pidio fuera explicitamente el
+# 9-sep-2026: "saber cuanto me cuesta cada trabajador (sin considerar el mio)".
+FUERA = ("CRAVE SPA", "77912665", "FELIX DE VICENT", "9359341", "17407271")
+
+
+def rut_key(v) -> str:
+    """RUT normalizado '9850887-2', o '' si no hay uno."""
+    s = re.sub(r"[^0-9kK]", "", str(v or "")).upper()
+    if len(s) < 2:
+        return ""
+    return s[:-1].lstrip("0") + "-" + s[-1]
+
+
+def _rut_en(texto) -> str:
+    """El RUT que aparece en la glosa del banco, o ''."""
+    m = re.search(r"(\d{7,8})\s*-\s*([0-9kK])", str(texto or ""))
+    return rut_key(m.group(1) + m.group(2)) if m else ""
+
+
+# Un pago hecho en los primeros dias del mes es el sueldo del mes ANTERIOR.
+_DIA_CORTE = 5
+
+
+def _mes_devengado(f) -> str:
+    """El mes que se TRABAJO, no el dia que se pago.
+
+    Medido contra el Master: el 1-jul se pago el sueldo de junio, el 31-jul el
+    de julio y el 1-sep el de agosto. Atribuyendo por dia de pago, agosto
+    quedaba sin sueldos y julio con el doble, y el costo por jornada salia
+    disparatado en los dos meses.
+    """
+    if f.day <= _DIA_CORTE:
+        anterior = f.replace(day=1) - dt.timedelta(days=1)
+        return "%04d-%02d" % (anterior.year, anterior.month)
+    return "%04d-%02d" % (f.year, f.month)
+
+
+def pagos_por_mes(path=None) -> dict:
+    """Lo que se pago de mano de obra, por mes.
+
+    {"planta": {rut: {"2026-06": monto}}, "previred": {mes: monto},
+     "temporal": {mes: monto}}
+
+    Previred va aparte porque se paga en un monto unico por todos: se reparte
+    despues, a prorrata de las jornadas del mes.
+    """
+    from openpyxl import load_workbook
+
+    from config import EXCEL_PATH
+    salida = {"planta": {}, "previred": {}, "temporal": {}}
+    try:
+        wb = load_workbook(path or EXCEL_PATH, read_only=True, data_only=True)
+        try:
+            ruts = set()
+            if PERSONAL_SHEET in wb.sheetnames:
+                for r in wb[PERSONAL_SHEET].iter_rows(min_row=2, values_only=True):
+                    if r and r[0] and rut_key(r[1]):
+                        ruts.add(rut_key(r[1]))
+            if BANCO_SHEET not in wb.sheetnames:
+                return salida
+            for r in wb[BANCO_SHEET].iter_rows(min_row=2, values_only=True):
+                if not r or not r[0]:
+                    continue
+                f = _fecha(r[0])
+                if not f:
+                    continue
+                try:
+                    cargo = float(r[3] or 0)
+                except (TypeError, ValueError):
+                    continue
+                if cargo <= 0:                  # un abono no es un pago
+                    continue
+                desc = str(r[1] or "")
+                cat = str(r[7] or "")
+                if any(x.upper() in desc.upper() for x in FUERA):
+                    continue
+                mes = _mes_devengado(f)
+                if "PREVIRED" in desc.upper():
+                    salida["previred"][mes] = salida["previred"].get(mes, 0) + cargo
+                    continue
+                rk = _rut_en(desc)
+                if rk and rk in ruts:
+                    salida["planta"].setdefault(rk, {})
+                    salida["planta"][rk][mes] = salida["planta"][rk].get(mes, 0) + cargo
+                elif cat == CAT_TEMPORAL:
+                    salida["temporal"][mes] = salida["temporal"].get(mes, 0) + cargo
+        finally:
+            wb.close()
+    except Exception as e:
+        logger.warning("labores: no pude leer los pagos: %r", e)
+    return salida

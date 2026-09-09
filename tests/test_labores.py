@@ -155,3 +155,140 @@ def test_una_aplicacion_sin_jornadas_anotadas_igual_cuenta_como_dia(tmp_path):
     assert len(r) == 1
     assert r[0]["dias"] == 1
     assert r[0]["jornadas"] == 0
+
+
+# ── Lo que se pagó, cruzado por RUT ────────────────────────────────────────
+# Las transferencias a la gente de planta llevan el RUT en la glosa
+# ("TEF 9850887-2 FELICITO AMIGO") y esos RUT están en la hoja Personal. Por
+# nombre no se puede: la bitácora usa el canónico y Personal el legal.
+
+from modules.labores import pagos_por_mes   # noqa: E402
+
+PERSONAL = ["Nombre", "RUT", "Cargo", "Fecha Ingreso", "Días Pendientes",
+            "Días Tomados Total", "Última Vacación", "Notas"]
+BANCO = ["Fecha", "Descripcion", "Referencia", "Cargo", "Abono", "Saldo",
+         "Tipo", "Categoria", "Cultivo", "Factura_linkeada"]
+
+
+def _libro_pagos(tmp_path, personal, movs, filas_bit=()):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Bitácora"
+    ws.append(ENC)
+    for f in filas_bit:
+        ws.append(f)
+    wp = wb.create_sheet("Personal")
+    wp.append(PERSONAL)
+    for p in personal:
+        wp.append(list(p) + [None] * (len(PERSONAL) - len(p)))
+    wbco = wb.create_sheet("Cuenta Banco")
+    wbco.append(BANCO)
+    for m in movs:
+        fila = [None] * len(BANCO)
+        fila[0], fila[1], fila[3], fila[7] = m[0], m[1], m[2], m[3]
+        wbco.append(fila)
+    ruta = tmp_path / "pagos.xlsx"
+    wb.save(ruta)
+    return str(ruta)
+
+
+def test_cruza_el_pago_por_RUT_no_por_nombre(tmp_path):
+    ruta = _libro_pagos(
+        tmp_path,
+        [("Felicito Amigo Soto", "9.850.887-2")],
+        [("2026-06-20", "TEF  9850887-2 FELICITO AMIGO", 885110,
+          "MANO DE OBRA PLANTA")])
+    assert pagos_por_mes(path=ruta)["planta"]["9850887-2"]["2026-06"] == 885110
+
+
+def test_dos_transferencias_el_mismo_mes_se_suman(tmp_path):
+    """Juan cobró dos veces en septiembre: 1.356.322 + 1.080.000."""
+    ruta = _libro_pagos(
+        tmp_path,
+        [("Juan Parada Castillo", "13.373.052-4")],
+        [("2026-09-01", "TEF 13373052-4 Juan Parada Cas", 1356322,
+          "MANO DE OBRA PLANTA"),
+         ("2026-09-01", "TEF 13373052-4 Juan Parada Cas", 1080000,
+          "MANO DE OBRA PLANTA")])
+    # Pagadas el 1-sep: las dos son el sueldo de AGOSTO.
+    assert pagos_por_mes(path=ruta)["planta"]["13373052-4"]["2026-08"] == 2436322
+
+
+def test_lo_del_dueno_queda_fuera(tmp_path):
+    """CRAVE SPA y las remuneraciones de Felix no son costo de labor."""
+    ruta = _libro_pagos(
+        tmp_path,
+        [("Felicito Amigo Soto", "9.850.887-2")],
+        [("2026-06-01", "TEF 77912665-K CRAVE SPA", 2029455,
+          "MANO DE OBRA PLANTA"),
+         ("2026-06-01", "Remuneracion Mayo Felix De Vicente", 2024358,
+          "MANO DE OBRA PLANTA"),
+         ("2026-06-01", "TEF  9359341-3 FELIX DE VICENT", 905117,
+          "MANO DE OBRA PLANTA")])
+    p = pagos_por_mes(path=ruta)
+    assert p["planta"] == {}
+    assert p["previred"] == {}
+    assert p["temporal"] == {}
+
+
+def test_previred_se_guarda_aparte(tmp_path):
+    ruta = _libro_pagos(
+        tmp_path, [],
+        [("2026-06-12", "PAGO COTIZ.PREVIRED", 2042431, "MANO DE OBRA PLANTA")])
+    assert pagos_por_mes(path=ruta)["previred"]["2026-06"] == 2042431
+
+
+def test_la_mano_de_obra_temporal_va_a_su_bolsa(tmp_path):
+    ruta = _libro_pagos(
+        tmp_path, [],
+        [("2026-08-20", "PAGO CUADRILLA", 1500000, "MANO DE OBRA TEMPORAL")])
+    assert pagos_por_mes(path=ruta)["temporal"]["2026-08"] == 1500000
+
+
+def test_un_abono_no_es_un_pago(tmp_path):
+    """Solo los cargos son plata que salió."""
+    ruta = _libro_pagos(
+        tmp_path, [],
+        [("2026-08-01", "DEVOLUCION", 0, "MANO DE OBRA TEMPORAL")])
+    assert pagos_por_mes(path=ruta)["temporal"] == {}
+
+
+# ── El mes que se PAGA no es el mes que se TRABAJA ─────────────────────────
+# Medido contra el Master: el 1-jul se pagó el sueldo de junio, el 31-jul el de
+# julio y el 1-sep el de agosto. Sin corregirlo, agosto quedaba sin pagos y
+# julio con el doble, y el costo por jornada salía disparatado en los dos.
+
+
+def test_el_sueldo_pagado_el_primero_es_del_mes_anterior(tmp_path):
+    ruta = _libro_pagos(
+        tmp_path,
+        [("Felicito Amigo Soto", "9.850.887-2")],
+        [("2026-07-01", "TEF  9850887-2 FELICITO AMIGO", 885110,
+          "MANO DE OBRA PLANTA")])
+    p = pagos_por_mes(path=ruta)["planta"]["9850887-2"]
+    assert p == {"2026-06": 885110}
+
+
+def test_el_sueldo_pagado_a_fin_de_mes_es_de_ese_mes(tmp_path):
+    ruta = _libro_pagos(
+        tmp_path,
+        [("Felicito Amigo Soto", "9.850.887-2")],
+        [("2026-07-31", "TEF  9850887-2 FELICITO AMIGO", 885110,
+          "MANO DE OBRA PLANTA")])
+    assert pagos_por_mes(path=ruta)["planta"]["9850887-2"] == {"2026-07": 885110}
+
+
+def test_el_1_de_enero_cae_en_diciembre_del_año_anterior(tmp_path):
+    ruta = _libro_pagos(
+        tmp_path,
+        [("Felicito Amigo Soto", "9.850.887-2")],
+        [("2027-01-01", "TEF  9850887-2 FELICITO AMIGO", 885110,
+          "MANO DE OBRA PLANTA")])
+    assert pagos_por_mes(path=ruta)["planta"]["9850887-2"] == {"2026-12": 885110}
+
+
+def test_previred_tambien_se_corre_al_mes_trabajado(tmp_path):
+    ruta = _libro_pagos(
+        tmp_path, [],
+        [("2026-07-10", "PAGO COTIZ.PREVIRED", 2067109, "MANO DE OBRA PLANTA")])
+    assert pagos_por_mes(path=ruta)["previred"] == {"2026-07": 2067109}
