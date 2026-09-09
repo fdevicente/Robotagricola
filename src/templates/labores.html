@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Labores y mano de obra — Agrícola Santa Elisa</title>
+<style>
+body { font-family: -apple-system, Arial, sans-serif; margin: 0; background: #f5f5f5; color: #2c3e50; }
+.header { background: #2c3e50; color: white; padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+.header h1 { margin: 0; font-size: 20px; }
+.header a { color: #95d5d3; margin-left: 16px; text-decoration: none; font-size: 13px; }
+.container { padding: 20px; max-width: 1500px; margin: 0 auto; }
+.filtros { background: white; padding: 12px 20px; margin-bottom: 16px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; }
+.filtros label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: .5px; display: block; margin-bottom: 4px; }
+.filtros input { padding: 6px 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 13px; }
+.filtros button { padding: 7px 16px; border: 0; border-radius: 5px; background: #2c3e50; color: white; font-size: 13px; cursor: pointer; }
+.summary { background: white; padding: 14px 20px; margin-bottom: 16px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); display: flex; gap: 34px; flex-wrap: wrap; }
+.summary-item { display: flex; flex-direction: column; }
+.summary-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: .5px; }
+.summary-value { font-size: 22px; font-weight: 700; margin-top: 4px; color: #2c3e50; }
+.card { background: white; padding: 18px 22px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 16px; overflow-x: auto; }
+.card h2 { margin: 0 0 4px; font-size: 15px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: 10px 12px; background: #f8f9fa; color: #555; font-weight: 600; font-size: 11px; text-transform: uppercase; border-bottom: 2px solid #e0e0e0; }
+td { padding: 9px 12px; border-bottom: 1px solid #eee; vertical-align: top; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr:hover td { background: #fafbfc; }
+.sindatos { color: #b0b0b0; font-style: italic; }
+.etq { font-size: 11px; color: #999; margin-top: 3px; }
+.nota { font-size: 12px; color: #8a8a8a; margin: 6px 0 12px; }
+.aviso { background: #fff8e6; border-left: 3px solid #e6b800; padding: 10px 14px; font-size: 12.5px; color: #6b5a00; border-radius: 0 6px 6px 0; margin-bottom: 16px; }
+.barra { background: #e8eef2; border-radius: 3px; height: 9px; }
+.barra > i { display: block; background: #3d7ea6; height: 9px; border-radius: 3px; }
+.cargando { padding: 40px; text-align: center; color: #999; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Labores y mano de obra</h1>
+  <div>
+    <a href="/">Dashboard</a>
+    <a href="/cash-flow">Flujo de caja</a>
+    <a href="/vacaciones">Vacaciones</a>
+    <a href="/conciliacion">Conciliación</a>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="filtros">
+    <div><label for="desde">Desde</label><input type="date" id="desde"></div>
+    <div><label for="hasta">Hasta</label><input type="date" id="hasta"></div>
+    <button onclick="cargar()">Aplicar</button>
+    <button onclick="document.getElementById('desde').value='';document.getElementById('hasta').value='';cargar()" style="background:#7d8b96">Todo</button>
+  </div>
+
+  <div class="aviso">
+    <strong>De dónde sale el costo.</strong> No hay una tarifa de jornada cargada a mano: se calcula con
+    la plata que efectivamente salió del banco. A la gente de planta se le cruza el sueldo del mes por RUT
+    y se le suma su parte de las cotizaciones; a la cuadrilla de temporada se le prorratea el total del mes,
+    que <strong>no es un valor exacto por persona</strong>. Lo del dueño queda fuera. Un mes sin pagos
+    cargados dice <em>sin datos</em>, nunca cero.
+  </div>
+
+  <div id="resumen" class="summary"></div>
+  <div id="cuerpo" class="cargando">Cargando…</div>
+
+  <p class="nota">La bitácora arranca en junio de 2026: el acumulado cubre desde esa fecha.</p>
+</div>
+
+<script>
+const fmt = n => '$' + Math.round(n).toLocaleString('es-CL');
+const jh  = n => (Math.round(n * 10) / 10).toLocaleString('es-CL');
+
+// null NO es cero. Un cero se lee como "salió gratis" y sería mentira.
+function plata(v) {
+  return v === null || v === undefined
+    ? '<span class="sindatos">sin datos</span>'
+    : fmt(v);
+}
+
+function tabla(cols, filas) {
+  return '<table><thead><tr>' +
+    cols.map(c => `<th${c.num ? ' style="text-align:right"' : ''}>${c.t}</th>`).join('') +
+    '</tr></thead><tbody>' + filas.join('') + '</tbody></table>';
+}
+
+function render(d) {
+  const totJh = d.labores.reduce((a, x) => a + x.jornadas, 0);
+  const totCosto = d.labores.reduce((a, x) => a + (x.costo || 0), 0);
+  const sinCosto = d.labores.reduce((a, x) => a + (x.costo === null ? x.jornadas : 0), 0);
+
+  document.getElementById('resumen').innerHTML = `
+    <div class="summary-item"><span class="summary-label">Jornadas-hombre</span><span class="summary-value">${jh(totJh)}</span></div>
+    <div class="summary-item"><span class="summary-label">Labores</span><span class="summary-value">${d.labores.length}</span></div>
+    <div class="summary-item"><span class="summary-label">Costo imputado</span><span class="summary-value">${fmt(totCosto)}</span></div>
+    <div class="summary-item"><span class="summary-label">Jornadas sin costo</span><span class="summary-value">${jh(sinCosto)}</span></div>`;
+
+  let h = '';
+
+  h += '<div class="card"><h2>Acumulado por labor</h2>' +
+    '<p class="nota">Debajo de cada labor, las etiquetas de la bitácora que se agruparon en ella. Si alguna no corresponde, hay que corregir la agrupación.</p>' +
+    tabla([{t:'Labor'},{t:'Jornadas',num:1},{t:'Días',num:1},{t:'Personas',num:1},{t:'Período'},{t:'Costo',num:1}],
+      d.labores.map(x => `<tr><td><strong>${x.labor}</strong><div class="etq">${x.etiquetas.join(' · ')}</div></td>
+        <td class="num">${jh(x.jornadas)}</td><td class="num">${x.dias}</td><td class="num">${x.personas}</td>
+        <td>${x.desde} → ${x.hasta}</td><td class="num">${plata(x.costo)}</td></tr>`)) + '</div>';
+
+  h += '<div class="card"><h2>Costo por trabajador</h2>' +
+    '<p class="nota">El costo por jornada no se publica con menos de 5 jornadas anotadas: dividir ahí no significa nada.</p>' +
+    tabla([{t:'Persona'},{t:'Jornadas',num:1},{t:'Sueldos',num:1},{t:'Cotizaciones',num:1},{t:'Costo total',num:1},{t:'Por jornada',num:1},{t:'Labores'}],
+      d.trabajadores.map(x => `<tr><td><strong>${x.persona}</strong></td>
+        <td class="num">${jh(x.jornadas)}</td><td class="num">${plata(x.pagado)}</td>
+        <td class="num">${x.previred ? fmt(x.previred) : '<span class="sindatos">—</span>'}</td>
+        <td class="num">${plata(x.costo)}</td><td class="num">${plata(x.costo_jornada)}</td>
+        <td class="etq">${x.labores.join(' · ')}</td></tr>`)) + '</div>';
+
+  h += '<div class="card"><h2>Por cultivo y sector</h2>' +
+    tabla([{t:'Cultivo'},{t:'Sector'},{t:'Jornadas',num:1},{t:'Días',num:1},{t:'Costo',num:1}],
+      d.cultivos.map(x => `<tr><td>${x.cultivo}</td><td>${x.sector || '<span class="sindatos">—</span>'}</td>
+        <td class="num">${jh(x.jornadas)}</td><td class="num">${x.dias}</td><td class="num">${plata(x.costo)}</td></tr>`)) + '</div>';
+
+  const maxJh = Math.max(...d.meses.map(m => m.jornadas), 1);
+  h += '<div class="card"><h2>Evolución mensual</h2>' +
+    tabla([{t:'Mes'},{t:'Jornadas',num:1},{t:''},{t:'Costo',num:1},{t:'Labor principal'}],
+      d.meses.map(m => {
+        const top = Object.entries(m.por_labor).sort((a, b) => b[1] - a[1])[0];
+        return `<tr><td><strong>${m.mes}</strong></td><td class="num">${jh(m.jornadas)}</td>
+          <td style="width:38%"><div class="barra"><i style="width:${m.jornadas / maxJh * 100}%"></i></div></td>
+          <td class="num">${plata(m.costo)}</td>
+          <td>${top ? top[0] + ' <span class="etq">(' + jh(top[1]) + ' jh)</span>' : ''}</td></tr>`;
+      })) + '</div>';
+
+  document.getElementById('cuerpo').className = '';
+  document.getElementById('cuerpo').innerHTML = h;
+}
+
+function cargar() {
+  const p = new URLSearchParams();
+  const d = document.getElementById('desde').value;
+  const h = document.getElementById('hasta').value;
+  if (d) p.set('desde', d);
+  if (h) p.set('hasta', h);
+  document.getElementById('cuerpo').className = 'cargando';
+  document.getElementById('cuerpo').textContent = 'Cargando…';
+  fetch('/api/labores?' + p.toString())
+    .then(r => r.json())
+    .then(render)
+    .catch(e => {
+      document.getElementById('cuerpo').textContent = 'No pude cargar los datos: ' + e;
+    });
+}
+
+cargar();
+</script>
+</body>
+</html>

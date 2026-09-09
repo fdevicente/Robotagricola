@@ -439,6 +439,25 @@ def api_vacaciones():
     return jsonify(get_vacaciones_pendientes())
 
 
+@app.route("/labores")
+def labores_page():
+    return render_template("labores.html")
+
+
+@app.route("/api/labores")
+def api_labores():
+    from modules.labores import (costo_por_trabajador, evolucion_mensual,
+                                 por_cultivo_sector, resumen_labores)
+    desde = request.args.get("desde") or None
+    hasta = request.args.get("hasta") or None
+    return jsonify({
+        "labores": resumen_labores(desde, hasta),
+        "trabajadores": costo_por_trabajador(desde, hasta),
+        "cultivos": por_cultivo_sector(desde, hasta),
+        "meses": evolucion_mensual(desde, hasta),
+    })
+
+
 @app.route("/reporte/<int:year>/<int:month>")
 def reporte_mensual_page(year, month):
     data = get_reporte_mensual(year, month)
