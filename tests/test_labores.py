@@ -170,13 +170,29 @@ BANCO = ["Fecha", "Descripcion", "Referencia", "Cargo", "Abono", "Saldo",
          "Tipo", "Categoria", "Cultivo", "Factura_linkeada"]
 
 
-def _libro_pagos(tmp_path, personal, movs, filas_bit=()):
+FAC = ["Fecha Emision / Fecha", "Fecha Vencimiento", "Fecha Pago",
+       "Nombre Factura / Proveedor", "Rut", "Documento",
+       "Numero Factura / Nro Documento",
+       "Detalle / Glosa (solamente el nombre del producto) / NOTA",
+       "Glosa II ( Detalle completo del producto)", "V", "C", "N", "I", "E",
+       "Total por Item", "TOTAL FACTURA", "Cat", "Cul", "Conf", "Por", "Arch"]
+
+
+def _libro_pagos(tmp_path, personal, movs, filas_bit=(), facturas=()):
+    """`facturas`: (emision, nro, total, glosa) de la cuadrilla (Alpabesa)."""
     wb = Workbook()
     ws = wb.active
     ws.title = "Bitácora"
     ws.append(ENC)
     for f in filas_bit:
         ws.append(f)
+    wf = wb.create_sheet("Facturas")
+    wf.append(FAC)
+    for emision, nro, total, glosa in facturas:
+        fila = [None] * len(FAC)
+        fila[0], fila[3], fila[6] = emision, "ALPABESA", nro
+        fila[7], fila[14] = glosa, total
+        wf.append(fila)
     wp = wb.create_sheet("Personal")
     wp.append(PERSONAL)
     for p in personal:
@@ -471,18 +487,27 @@ from modules.labores import evolucion_mensual, por_cultivo_sector   # noqa: E402
 
 
 def test_el_costo_de_una_labor_suma_planta_y_cuadrilla(tmp_path):
+    """La cuadrilla se costea con la factura de Alpabesa, no con el banco."""
     ruta = _libro_pagos(
         tmp_path,
         [("Felicito Amigo Soto", "9.850.887-2")],
         [("2026-08-20", "TEF  9850887-2 FELICITO AMIGO", 900000,
-          "MANO DE OBRA PLANTA"),
-         ("2026-08-20", "PAGO CUADRILLA", 600000, "MANO DE OBRA TEMPORAL")],
+          "MANO DE OBRA PLANTA")],
         [_fila("2026-08-10", "Sacar restos poda nogales", 1, "Felicito Amigo"),
-         _fila("2026-08-10", "Sacar restos poda nogales", 3, "Pedro Soto, Ana Ruiz, Luis Paz")])
+         _fila("2026-08-10", "Sacar restos poda nogales", 3, "Pedro Soto, Ana Ruiz, Luis Paz")],
+        facturas=[("2026-08-15", "98", 892500, "20 JH limpieza poda")])
     r = {x["labor"]: x for x in resumen_labores(path=ruta)}["Sacar restos de poda"]
     assert r["jornadas"] == 4
-    # planta 900.000 / 1 jornada · cuadrilla 600.000 / 3 jornadas
-    assert round(r["costo"]) == 1500000
+    # planta 900.000 / 1 jornada · cuadrilla 3 jornadas a 892.500/20 = 44.625
+    assert round(r["costo"]) == 900000 + 3 * 44625
+
+
+def test_sin_factura_de_cuadrilla_esas_jornadas_quedan_sin_costo(tmp_path):
+    """No se inventa un precio: si Alpabesa no facturó, no hay con qué costear."""
+    ruta = _libro_pagos(
+        tmp_path, [], [],
+        [_fila("2026-08-10", "Sacar restos poda nogales", 3, "Pedro Soto, Ana Ruiz, Luis Paz")])
+    assert resumen_labores(path=ruta)[0]["costo"] is None
 
 
 def test_sin_pagos_el_costo_de_la_labor_es_sin_datos(tmp_path):
@@ -519,3 +544,161 @@ def test_la_evolucion_abre_por_labor(tmp_path):
     m = evolucion_mensual(path=ruta)[0]
     assert m["por_labor"]["Poda"] == 2
     assert m["por_labor"]["Aplicación herbicida"] == 1
+
+
+# ── La cuadrilla se factura, no se paga por transferencia ──────────────────
+# El dueño lo dijo el 9-sep-2026: "los costos de la cuadrilla están dados por
+# las facturas de alpabesa, de ahí puedes sacar el costo total y en la
+# descripción de la factura dice cuántas JH son".
+#
+# Medido: el precio por jornada es notablemente estable en $44.625 (facturas
+# 98, 480, 503, 544, 677) y las jornadas vienen escritas de seis formas
+# distintas: "58JH", "107JH", "83 Jornadas", "18 JH", "24 hrs JH",
+# "528 JH y 14 J tractor", "484 JH + 35 JH".
+
+from modules.labores import jornadas_en_texto, facturas_cuadrilla   # noqa: E402
+
+
+def test_lee_las_jornadas_escritas_de_todas_las_formas_que_aparecen():
+    assert jornadas_en_texto("58JH para trabajo de limpieza poda") == 58
+    assert jornadas_en_texto("107JH de trabajo campo") == 107
+    assert jornadas_en_texto("83 Jornadas") == 83
+    assert jornadas_en_texto("18 JH") == 18
+    assert jornadas_en_texto("24 hrs JH Aplicación Herbicida") == 24
+    assert jornadas_en_texto("96 JH Limpieza maleza") == 96
+    assert jornadas_en_texto("Desmalezado 98 JH") == 98
+    assert jornadas_en_texto("90JH trabajos varios") == 90
+
+
+def test_suma_las_partidas_cuando_la_factura_trae_varias():
+    """'484 JH + 35 JH' son 519 jornadas en una sola factura."""
+    assert jornadas_en_texto("484 JH + 35 JH") == 519
+
+
+def test_las_jornadas_de_tractor_tambien_cuentan():
+    """'528 JH y 14 J tractor': el operador de tractor también es una jornada."""
+    assert jornadas_en_texto("528 JH y 14 J tractor") == 542
+
+
+def test_una_glosa_sin_jornadas_no_inventa_un_numero():
+    assert jornadas_en_texto("Cosecha Cerezas") is None
+    assert jornadas_en_texto("Trabajos nogales, quitar pasto y sacar ramas") is None
+    assert jornadas_en_texto("") is None
+    assert jornadas_en_texto(None) is None
+
+
+def test_un_ano_o_una_fecha_no_son_jornadas():
+    """'Periodo del 01 al 11 de Sep del 2025' no son 2025 jornadas."""
+    assert jornadas_en_texto("Periodo del 01 al 11 de Sep del 2025") is None
+    assert jornadas_en_texto("Jornadas Agricolas - Período del 06 al 23 de Abril") is None
+
+
+def test_la_misma_glosa_repetida_no_duplica_las_jornadas(tmp_path):
+    """⚠️ Medido: la factura 94 dice "107 JH" en las DOS columnas de glosa del
+    Master y salían 214; la 57 decía 32 y salían 64. Sumar entre columnas
+    duplica; sumar DENTRO de una glosa ("484 JH + 35 JH") es lo correcto."""
+    from openpyxl import Workbook
+    from modules.labores import facturas_cuadrilla
+    FAC = ["Fecha Emision / Fecha", "Fecha Vencimiento", "Fecha Pago",
+           "Nombre Factura / Proveedor", "Rut", "Documento",
+           "Numero Factura / Nro Documento",
+           "Detalle / Glosa (solamente el nombre del producto) / NOTA",
+           "Glosa II ( Detalle completo del producto)", "V", "C", "N", "I", "E",
+           "Total por Item", "TOTAL FACTURA", "Cat", "Cul", "Conf", "Por", "Arch"]
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Facturas"
+    ws.append(FAC)
+    fila = [None] * len(FAC)
+    fila[0], fila[3], fila[6] = "2024-11-04", "ALPABESA", "94"
+    fila[7] = fila[8] = "107 JH"           # el mismo número en las dos columnas
+    fila[14] = 4774875
+    ws.append(fila)
+    ruta = tmp_path / "fac.xlsx"
+    wb.save(ruta)
+
+    vacio = Workbook()
+    vacio.active.title = "FXP"
+    vacio["FXP"].append(["Fecha Emision", "V", "P", "N", "M", "A",
+                         "Nombre Factura", "Numero Factura", "Monto",
+                         "I", "D", "Saldo", "Notas"])
+    rfxp = tmp_path / "fxp.xlsx"
+    vacio.save(rfxp)
+
+    f = facturas_cuadrilla(path=str(ruta), fxp_path=str(rfxp))[0]
+    assert f["jornadas"] == 107
+    assert round(f["costo_jornada"]) == 44625
+
+
+def test_la_tarifa_de_la_cuadrilla_sale_de_la_factura_mas_cercana():
+    """No hay que interpolar: se usa el precio de la factura vigente al mes."""
+    from modules.labores import tarifa_cuadrilla
+    facturas = [
+        {"emision": "2026-09-09", "jornadas": 58, "costo_jornada": 44625.0},
+        {"emision": "2026-04-27", "jornadas": 542, "costo_jornada": 45435.0},
+        {"emision": "2025-02-14", "jornadas": 98, "costo_jornada": 38960.0},
+    ]
+    assert tarifa_cuadrilla("2026-08", facturas) == 45435.0   # rige la de abril
+    assert tarifa_cuadrilla("2026-09", facturas) == 44625.0   # ya rige la de sept
+    assert tarifa_cuadrilla("2025-03", facturas) == 38960.0
+
+
+def test_antes_de_la_primera_factura_se_usa_la_primera():
+    """No se inventa un precio ni se deja sin costo: se usa el más antiguo."""
+    from modules.labores import tarifa_cuadrilla
+    facturas = [{"emision": "2026-04-27", "jornadas": 10, "costo_jornada": 45435.0}]
+    assert tarifa_cuadrilla("2020-01", facturas) == 45435.0
+
+
+def test_sin_facturas_de_cuadrilla_no_hay_tarifa():
+    from modules.labores import tarifa_cuadrilla
+    assert tarifa_cuadrilla("2026-08", []) is None
+    assert tarifa_cuadrilla("2026-08", [{"emision": "2026-01-01",
+                                        "jornadas": None,
+                                        "costo_jornada": None}]) is None
+
+
+# ── ¿Las jornadas facturadas son las que se trabajaron? ────────────────────
+# Medido el 9-sep-2026: la bitácora anota 104 jornadas de cuadrilla entre junio
+# y septiembre, y Alpabesa facturó 58 en ese período. El cruce es el control
+# que el dueño no tenía.
+
+from modules.labores import cuadrilla_facturado_vs_anotado   # noqa: E402
+
+
+def test_cruza_lo_facturado_contra_lo_anotado(tmp_path):
+    ruta = _libro_pagos(
+        tmp_path,
+        [("Felicito Amigo Soto", "9.850.887-2")],
+        [],
+        [_fila("2026-08-10", "Sacar restos poda nogales", 3, "Pedro Soto, Ana Ruiz, Luis Paz"),
+         _fila("2026-08-11", "Sacar restos poda nogales", 1, "Felicito Amigo")],
+        facturas=[("2026-08-15", "98", 892500, "20 JH limpieza poda")])
+    r = cuadrilla_facturado_vs_anotado(path=ruta)
+    assert r["anotadas"] == 3        # Felicito es de planta, no cuadrilla
+    assert r["facturadas"] == 20
+    assert r["diferencia"] == 17     # facturadas de más
+
+
+def test_sin_facturas_la_diferencia_es_todo_lo_anotado(tmp_path):
+    ruta = _libro_pagos(
+        tmp_path, [], [],
+        [_fila("2026-08-10", "Sacar restos poda nogales", 3, "Pedro Soto, Ana Ruiz, Luis Paz")])
+    r = cuadrilla_facturado_vs_anotado(path=ruta)
+    assert r["anotadas"] == 3
+    assert r["facturadas"] == 0
+    assert r["diferencia"] == -3     # trabajadas y sin facturar
+
+
+def test_sin_rango_compara_solo_el_periodo_que_cubre_la_bitacora(tmp_path):
+    """⚠️ Medido: sin acotar, contaba 2.258 jornadas facturadas desde 2023
+    contra 104 anotadas desde junio de 2026, y la diferencia daba 2.154. Comparar
+    una factura de 2023 contra una bitácora que arranca en 2026 no dice nada."""
+    ruta = _libro_pagos(
+        tmp_path, [], [],
+        [_fila("2026-08-10", "Sacar restos poda nogales", 3, "Pedro Soto, Ana Ruiz, Luis Paz")],
+        facturas=[("2026-08-15", "98", 892500, "20 JH limpieza poda"),
+                  ("2023-05-08", "908", 4462500, "100 JH cosecha vieja")])
+    r = cuadrilla_facturado_vs_anotado(path=ruta)
+    assert r["facturadas"] == 20          # la de 2023 no entra
+    assert len(r["facturas"]) == 1

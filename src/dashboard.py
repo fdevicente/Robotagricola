@@ -446,8 +446,10 @@ def labores_page():
 
 @app.route("/api/labores")
 def api_labores():
-    from modules.labores import (costo_por_trabajador, evolucion_mensual,
-                                 por_cultivo_sector, resumen_labores)
+    from modules.labores import (costo_por_trabajador,
+                                 cuadrilla_facturado_vs_anotado,
+                                 evolucion_mensual, por_cultivo_sector,
+                                 resumen_labores)
     desde = request.args.get("desde") or None
     hasta = request.args.get("hasta") or None
     return jsonify({
@@ -455,6 +457,7 @@ def api_labores():
         "trabajadores": costo_por_trabajador(desde, hasta),
         "cultivos": por_cultivo_sector(desde, hasta),
         "meses": evolucion_mensual(desde, hasta),
+        "cuadrilla": cuadrilla_facturado_vs_anotado(desde, hasta),
     })
 
 

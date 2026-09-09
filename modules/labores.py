@@ -435,11 +435,16 @@ def _tabla_costos(personas, pagos, filas) -> dict:
         cuota = prev * jh / jh_planta_mes[mes] if jh_planta_mes.get(mes) else 0
         planta[(rut, mes)] = (base + cuota) / jh
 
+    # La cuadrilla NO sale de la categoria MANO DE OBRA TEMPORAL del banco: su
+    # ultimo movimiento es del 20-may-2026 y en agosto hubo 20 personas sacando
+    # restos de poda. Sale de las facturas de Alpabesa, que declaran cuantas
+    # jornadas cubren. Dicho por el dueño el 9-sep-2026.
+    facturas = facturas_cuadrilla(_PATH_ACTUAL[0])
     temporal = {}
-    for mes, jh in jh_cuadrilla.items():
-        total = pagos["temporal"].get(mes)
-        if total and jh:
-            temporal[mes] = total / jh
+    for mes in jh_cuadrilla:
+        t = tarifa_cuadrilla(mes, facturas)
+        if t:
+            temporal[mes] = t
     return {"planta": planta, "temporal": temporal}
 
 
@@ -460,8 +465,14 @@ def _costo_fila(f, personas, tabla):
     return total if visto else None
 
 
+# La ruta del libro en curso, para que _tabla_costos pueda leer las facturas de
+# la cuadrilla sin cambiarle la firma a las cuatro funciones publicas.
+_PATH_ACTUAL = [None]
+
+
 def _con_costo(desde, hasta, path):
     """(filas del rango, personas, tabla de costos). Base de las tres vistas."""
+    _PATH_ACTUAL[0] = path
     personas = _personas_del_master(path)
     pagos = pagos_por_mes(path)
     filas = [f for f in _leer_bitacora(path) if _en_rango(f["fecha"], desde, hasta)]
@@ -504,3 +515,198 @@ def evolucion_mensual(desde=None, hasta=None, path=None) -> list:
         d["por_labor"][g] = d["por_labor"].get(g, 0) + f["jornadas"]
     salida = [dict(d, dias=len(d.pop("_dias"))) for d in acc.values()]
     return sorted(salida, key=lambda x: x["mes"])
+
+
+# ── La cuadrilla: se factura, no se paga por transferencia ─────────────────
+#
+# El dueño, 9-sep-2026: "los costos de la cuadrilla estan dados por las facturas
+# de alpabesa, de ahi puedes sacar el costo total y en la descripcion de la
+# factura dice cuantas JH son". Por eso la categoria MANO DE OBRA TEMPORAL del
+# banco no sirve: su ultimo movimiento es del 20-may-2026 y en agosto hubo 20
+# personas sacando restos de poda.
+
+PROVEEDOR_CUADRILLA = "ALPABESA"
+
+# Margen para que una factura emitida despues del periodo cuente igual: cobra
+# trabajo ya hecho. La N°98 se emitio el 9-sep por trabajo del 31-ago al 9-sep.
+DIAS_FACTURA_TARDIA = 30
+
+# Las jornadas vienen escritas de seis formas distintas en las glosas reales:
+# "58JH", "83 Jornadas", "18 JH", "24 hrs JH", "484 JH + 35 JH",
+# "528 JH y 14 J tractor". El operador de tractor tambien es una jornada.
+_RE_JH = re.compile(
+    r"(\d+)\s*(?:hrs?\.?\s*)?(?:JH\b|J\.H\.?|jornadas?\b|J\s+tractor\b)",
+    re.IGNORECASE)
+
+
+def jornadas_en_texto(texto):
+    """Las jornadas-hombre que declara una glosa, o None si no declara ninguna.
+
+    Suma las partidas: "484 JH + 35 JH" son 519. Nunca adivina: una glosa que
+    solo trae fechas --"Periodo del 01 al 11 de Sep del 2025"-- devuelve None,
+    no 2025.
+    """
+    if not texto:
+        return None
+    nums = [int(m) for m in _RE_JH.findall(str(texto))]
+    return sum(nums) if nums else None
+
+
+def facturas_cuadrilla(path=None, fxp_path=None) -> list:
+    """Facturas de la cuadrilla, con las jornadas que declaran y su precio.
+
+    Las jornadas salen de la glosa del Master y, si ahi no estan, de la columna
+    `Notas` de FXP, que es donde el dueño las anota.
+    """
+    from openpyxl import load_workbook
+
+    from config import EXCEL_PATH, FXP_PATH
+
+    # Con una ruta de prueba y sin FXP explicito NO se lee el FXP de
+    # produccion: un test tiene que ser hermetico, y si no, las jornadas de la
+    # cuadrilla saldrian de datos reales que el test no puso.
+    if fxp_path is None:
+        fxp_path = FXP_PATH if path is None else ""
+
+    notas_fxp = {}
+    try:
+        wf = load_workbook(fxp_path, read_only=True, data_only=True)
+        try:
+            for r in wf["FXP"].iter_rows(min_row=2, values_only=True):
+                if not r or not any(r):
+                    continue
+                if PROVEEDOR_CUADRILLA in str(r[6] or "").upper():
+                    nro = re.sub(r"\D", "", str(r[7] or "")).lstrip("0")
+                    if nro:
+                        notas_fxp[nro] = str(r[12] or "")
+        finally:
+            wf.close()
+    except Exception as e:
+        logger.warning("labores: no pude leer las notas de FXP: %r", e)
+
+    facturas = {}
+    try:
+        wb = load_workbook(path or EXCEL_PATH, read_only=True, data_only=True)
+        try:
+            ws = wb["Facturas"]
+            cab = next(ws.iter_rows(min_row=1, max_row=1), None)
+            enc = [c.value for c in cab] if cab else []
+            idx = {n: i for i, n in enumerate(enc)}
+
+            def col(r, n):
+                return r[idx[n]] if n in idx and len(r) > idx[n] else None
+
+            for r in ws.iter_rows(min_row=2, values_only=True):
+                if not r or not r[0]:
+                    continue
+                prov = str(col(r, "Nombre Factura / Proveedor") or "").upper()
+                if PROVEEDOR_CUADRILLA not in prov:
+                    continue
+                nro = re.sub(r"\D", "", str(
+                    col(r, "Numero Factura / Nro Documento") or "")).lstrip("0")
+                if not nro:
+                    continue
+                d = facturas.setdefault(nro, {
+                    "nro": nro, "emision": _fecha(col(r, "Fecha Emision / Fecha")),
+                    "total": 0.0, "glosas": []})
+                try:
+                    d["total"] += float(col(r, "Total por Item") or 0)
+                except (TypeError, ValueError):
+                    pass
+                for c in ("Detalle / Glosa (solamente el nombre del producto) / NOTA",
+                          "Glosa II ( Detalle completo del producto)"):
+                    v = col(r, c)
+                    # SIN REPETIR. Medido: la factura 94 dice "107 JH" en las
+                    # DOS columnas y salian 214 jornadas; la 57 decia 32 y
+                    # salian 64. Sumar entre columnas duplica; sumar DENTRO de
+                    # una glosa --"484 JH + 35 JH"-- es lo que hay que hacer.
+                    if v and str(v) not in d["glosas"]:
+                        d["glosas"].append(str(v))
+        finally:
+            wb.close()
+    except Exception as e:
+        logger.warning("labores: no pude leer las facturas de la cuadrilla: %r", e)
+        return []
+
+    salida = []
+    for nro, d in facturas.items():
+        jh = jornadas_en_texto(" · ".join(d["glosas"]))
+        if jh is None:
+            jh = jornadas_en_texto(notas_fxp.get(nro, ""))
+        salida.append({
+            "nro": nro,
+            "emision": str(d["emision"] or ""),
+            "total": d["total"],
+            "jornadas": jh,
+            "costo_jornada": (d["total"] / jh) if jh else None,
+            "glosa": (notas_fxp.get(nro) or " · ".join(d["glosas"]))[:90],
+        })
+    return sorted(salida, key=lambda x: x["emision"], reverse=True)
+
+
+def tarifa_cuadrilla(mes, facturas):
+    """Cuanto cuesta una jornada de cuadrilla en ese mes, o None.
+
+    Rige la factura de Alpabesa mas reciente emitida hasta el fin de ese mes.
+    Antes de la primera se usa la primera: no se inventa un precio, pero
+    tampoco se deja sin costo un trabajo que se hizo.
+    """
+    con_precio = sorted((f for f in facturas if f.get("costo_jornada")),
+                        key=lambda f: f["emision"])
+    if not con_precio:
+        return None
+    vigentes = [f for f in con_precio if f["emision"][:7] <= mes]
+    return (vigentes[-1] if vigentes else con_precio[0])["costo_jornada"]
+
+
+def cuadrilla_facturado_vs_anotado(desde=None, hasta=None, path=None) -> dict:
+    """Jornadas de cuadrilla anotadas en la bitacora contra las facturadas.
+
+    Es el control que no existia: si Alpabesa factura mas jornadas de las que
+    Juan anoto, o menos, alguien tiene que mirarlo. `diferencia` positiva son
+    jornadas facturadas de mas; negativa, trabajadas y todavia sin facturar.
+    """
+    personas = _personas_del_master(path)
+    filas = [f for f in _leer_bitacora(path) if _en_rango(f["fecha"], desde, hasta)]
+
+    # Sin rango explicito, se acota al periodo QUE CUBRE LA BITACORA. Medido:
+    # sin esto contaba 2.258 jornadas facturadas desde 2023 contra 104 anotadas
+    # desde junio de 2026, y la diferencia daba 2.154. Comparar una factura de
+    # 2023 contra una bitacora que arranca en 2026 no dice nada.
+    fechas = [f["fecha"] for f in filas if f["fecha"]]
+    if fechas:
+        desde = desde or min(fechas)
+        hasta = hasta or max(fechas)
+
+    anotadas = 0.0
+    por_mes = {}
+    for f in filas:
+        if not f["fecha"] or not f["personas"]:
+            continue
+        parte = f["jornadas"] / len(f["personas"])
+        mes = "%04d-%02d" % (f["fecha"].year, f["fecha"].month)
+        for p in f["personas"]:
+            if not _persona_de(p, personas)[0]:
+                anotadas += parte
+                por_mes[mes] = por_mes.get(mes, 0) + parte
+
+    # La factura se emite DESPUES del trabajo: la N°98 es del 9-sep y cubre del
+    # 31-ago al 9-sep, mientras la bitacora termina el 1-sep. Sin este margen la
+    # unica factura del periodo quedaba fuera y el cruce daba "0 facturadas".
+    tope = (_fecha(hasta) + dt.timedelta(days=DIAS_FACTURA_TARDIA)) if hasta else None
+
+    facturadas, facturas = 0.0, []
+    for x in facturas_cuadrilla(path):
+        if not x["jornadas"] or not x["emision"]:
+            continue
+        if not _en_rango(_fecha(x["emision"]), desde, tope):
+            continue
+        facturadas += x["jornadas"]
+        facturas.append(x)
+    return {
+        "anotadas": anotadas,
+        "facturadas": facturadas,
+        "diferencia": facturadas - anotadas,
+        "por_mes": por_mes,
+        "facturas": facturas,
+    }

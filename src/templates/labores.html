@@ -120,6 +120,26 @@ function render(d) {
       d.cultivos.map(x => `<tr><td>${x.cultivo}</td><td>${x.sector || '<span class="sindatos">—</span>'}</td>
         <td class="num">${jh(x.jornadas)}</td><td class="num">${x.dias}</td><td class="num">${plata(x.costo)}</td></tr>`)) + '</div>';
 
+  const c = d.cuadrilla;
+  const dif = c.diferencia;
+  h += '<div class="card"><h2>Cuadrilla: lo facturado contra lo anotado</h2>' +
+    '<p class="nota">Las jornadas de la cuadrilla se costean con las facturas de Alpabesa, que declaran cuántas cubren. Este cruce dice si lo que factura calza con lo que Juan anotó.</p>' +
+    `<div class="summary" style="box-shadow:none;padding:0 0 14px">
+       <div class="summary-item"><span class="summary-label">Anotadas por Juan</span><span class="summary-value">${jh(c.anotadas)}</span></div>
+       <div class="summary-item"><span class="summary-label">Facturadas</span><span class="summary-value">${jh(c.facturadas)}</span></div>
+       <div class="summary-item"><span class="summary-label">Diferencia</span>
+         <span class="summary-value" style="color:${Math.abs(dif) < 1 ? '#27ae60' : '#c0392b'}">
+           ${dif > 0 ? '+' : ''}${jh(dif)}</span></div>
+     </div>` +
+    (Math.abs(dif) < 1 ? '' :
+      `<p class="nota">${dif > 0
+        ? 'Alpabesa facturó más jornadas de las anotadas en la bitácora.'
+        : 'Hay jornadas trabajadas que todavía no aparecen facturadas.'}</p>`) +
+    tabla([{t:'Factura'},{t:'Emisión'},{t:'Jornadas',num:1},{t:'Total',num:1},{t:'Por jornada',num:1},{t:'Glosa'}],
+      c.facturas.map(f => `<tr><td><strong>N°${f.nro}</strong></td><td>${f.emision}</td>
+        <td class="num">${f.jornadas}</td><td class="num">${fmt(f.total)}</td>
+        <td class="num">${fmt(f.costo_jornada)}</td><td class="etq">${f.glosa}</td></tr>`)) + '</div>';
+
   const maxJh = Math.max(...d.meses.map(m => m.jornadas), 1);
   h += '<div class="card"><h2>Evolución mensual</h2>' +
     tabla([{t:'Mes'},{t:'Jornadas',num:1},{t:''},{t:'Costo',num:1},{t:'Labor principal'}],
