@@ -53,3 +53,24 @@ def test_bank_unlinked_only_cargos(m):
     wb.save(m); wb.close()
     movs = read_bank_movements_unlinked(excel_path=m)
     assert all(mv["fila"] != r for mv in movs)
+
+
+# ── Alias que costaron plata (8-sep-2026) ──────────────────────────────────
+# Alineando el Master con FXP, dos facturas que FXP tiene POR PAGAR se daban
+# por cerradas ($2.163.635) porque el nombre no calzaba. Es el mismo
+# emparejador que usa el conciliador.
+
+def test_salina_y_salinas_y_fabres_son_el_mismo_proveedor():
+    """FXP escribe 'Salina' en singular y el Master 'Salinas'."""
+    from modules.correlativo import _grupo_alias
+    a = _grupo_alias("Salina y fabres")
+    b = _grupo_alias("Salinas y Fabres")
+    assert a is not None and a == b
+
+
+def test_leonardo_con_y_sin_el_segundo_nombre_es_el_mismo():
+    """FXP trae 'Leonardo Ivan Nunez' y el Master 'LEONARDO NUNEZ'."""
+    from modules.correlativo import _grupo_alias
+    a = _grupo_alias("Leonardo Ivan Nunez")
+    b = _grupo_alias("LEONARDO NUNEZ")
+    assert a is not None and a == b

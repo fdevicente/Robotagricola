@@ -164,6 +164,20 @@ pendientes = {k: g for k, g in grupos.items() if not g["pago"] and not g["nn"]}
 quedan = {k: g for k, g in pendientes.items() if k in por_pagar}
 cerrar = {k: g for k, g in pendientes.items() if k not in por_pagar}
 
+# FXP es una FOTO con fecha. No puede opinar sobre una factura emitida despues
+# de esa foto: que no aparezca ahi no significa que este pagada, significa que
+# FXP todavia no la vio. Sin esto, el 8-sep-2026 se habrian cerrado las dos
+# facturas que Juan mando ese mismo dia por Telegram. La fecha sale del propio
+# archivo para que no envejezca escrita a mano.
+FXP_FOTO = date.fromtimestamp(os.path.getmtime(FXP))
+recientes = {k: g for k, g in cerrar.items()
+             if g["emision"] and g["emision"] > FXP_FOTO}
+for k in recientes:
+    cerrar.pop(k)
+    quedan[k] = recientes[k]
+print("FXP es del %s; %d factura(s) emitida(s) despues quedan pendientes "
+      "porque FXP no las vio\n" % (FXP_FOTO, len(recientes)))
+
 
 def buscar_pago(g):
     """Cargo(s) del banco que pagan esta factura.
@@ -201,6 +215,51 @@ def buscar_pago(g):
     return None
 
 
+# ── Segunda fuente de fechas: la hoja ScotiaBCO del propio FXP ──
+# El banco del Master trae la glosa CRUDA ("REDCOMPRA MERCADOPAGO FERRE"); la
+# de FXP la escribe el dueño y lleva el NÚMERO DE FACTURA ("Administradora de
+# ventas al detalle F24400914"). Por eso acá se empareja por número y no por
+# nombre: el filtro de nombres descarta las palabras muy comunes, y
+# "ADMINISTRADORA", "VENTAS" y "DETALLE" están las tres en esa lista, así que
+# ese proveedor se quedaba sin ninguna palabra con la que buscar y sus siete
+# facturas caían en "sin cargo identificado".
+mov_fxp = []
+_tmp2 = os.path.join(tempfile.gettempdir(), "fxp_bco.xlsx")
+shutil.copy2(FXP, _tmp2)
+_wb = load_workbook(_tmp2, read_only=True, data_only=True)
+for _r in _wb["ScotiaBCO"].iter_rows(min_row=6, values_only=True):
+    if not _r:
+        continue
+    _f, _d = _pd(_r[2]), str(_r[5] or "").strip()
+    try:
+        _m = float(_r[6] or 0)
+    except (TypeError, ValueError):
+        continue
+    if _f and _d and _m > 0:
+        mov_fxp.append({"fecha": _f, "desc": _d, "monto": _m,
+                        "nros": set(re.findall(r"\d+", _d))})
+_wb.close()
+
+
+def buscar_pago_fxp(g):
+    """El pago en ScotiaBCO de FXP, emparejado por NÚMERO de factura."""
+    nro = nro_key(g["nro"])
+    if not nro or len(nro) < 3:          # un número de 1-2 dígitos no identifica
+        return None
+    tol = max(100, g["total"] * 0.01)    # $7 de diferencia en Repuestos JP, $4 en Pachitas
+    hits = [c for c in mov_fxp if nro in c["nros"]
+            and abs(c["monto"] - g["total"]) <= tol]
+    if not hits:
+        return None
+    c = min(hits, key=lambda x: x["fecha"])
+    return c["fecha"], f"FXP/ScotiaBCO {c['fecha']}: {c['desc'][:32]}"
+
+
+# Proveedores que NO venden a crédito: la factura se paga el día que se emite.
+# Dicho por el dueño el 8-sep-2026 sobre Sodimac. Sin esto quedaban abiertas
+# para siempre esperando un cargo que nunca va a aparecer identificado.
+CONTADO = ("SODIMAC", "HOMECENTER")
+
 print("=" * 92)
 print(f"QUEDAN PENDIENTES ({len(quedan)}) — las que FXP tiene por pagar")
 print("=" * 92)
@@ -215,10 +274,14 @@ print("  " + "-" * 88)
 acciones, total = [], 0.0
 for k, g in sorted(cerrar.items(), key=lambda x: -x[1]["total"]):
     total += g["total"]
-    pago = buscar_pago(g)
+    pago = buscar_pago(g) or buscar_pago_fxp(g)
     if pago:
         fecha, origen = pago
         nota = f"Pagada — {origen}"
+    elif any(p in g["prov"].upper() for p in CONTADO) and g["emision"]:
+        fecha = g["emision"]
+        origen = "proveedor al contado → se paga el día de emisión"
+        nota = f"Pagada al contado el {fecha} (proveedor sin crédito)"
     else:
         # Sin evidencia de la fecha real: se usa la de alineación y se dice.
         # Nunca el vencimiento, que puede ser futuro.

@@ -59,6 +59,13 @@ ALIAS_PROVEEDOR = [
     {"ferreteria industrial talca", "ferrital", "ferreteriaindutrial talca"},
     {"certificacion de equipos ramirez", "certlab"},
     {"factoraurorania ductil", "imp pcplay"},
+    # Medidos el 8-sep-2026 alineando el Master con FXP: sin estos dos, dos
+    # facturas que FXP tiene POR PAGAR se daban por cerradas ($2.163.635).
+    # FXP escribe "Salina" en singular y el Master "Salinas".
+    {"salina y fabres", "salinas y fabres"},
+    # FXP trae el segundo nombre y el emparejador se queda con las dos primeras
+    # palabras: "LEONARDO IVAN" nunca calzaba con "LEONARDO NUNEZ".
+    {"leonardo ivan nunez", "leonardo nunez"},
 ]
 _ALIAS_IDX = {}
 for _g in ALIAS_PROVEEDOR:
