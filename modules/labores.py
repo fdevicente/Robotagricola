@@ -157,23 +157,26 @@ def resumen_labores(desde=None, hasta=None, path=None) -> list:
     Las etiquetas van en la salida a proposito: sin verlas, la agrupacion es una
     caja negra y nadie puede corregirla.
     """
+    filas, personas, tabla = _con_costo(desde, hasta, path)
     acc = {}
-    for f in _leer_bitacora(path):
-        if not _en_rango(f["fecha"], desde, hasta):
-            continue
+    for f in filas:
         g = grupo_de(f["actividad"])
-        d = acc.setdefault(g, {"labor": g, "jornadas": 0.0, "_dias": set(),
-                               "_pers": set(), "_etq": set()})
+        d = acc.setdefault(g, {"labor": g, "jornadas": 0.0, "costo": None,
+                               "_dias": set(), "_pers": set(), "_etq": set()})
         d["jornadas"] += f["jornadas"]
         d["_dias"].add(f["fecha"])
         d["_pers"].update(_clave(p) for p in f["personas"])
         d["_etq"].add(f["actividad"])
+        c = _costo_fila(f, personas, tabla)
+        if c is not None:
+            d["costo"] = (d["costo"] or 0) + c
 
     salida = []
     for d in acc.values():
         salida.append({
             "labor": d["labor"],
             "jornadas": d["jornadas"],
+            "costo": d["costo"],
             "dias": len(d["_dias"]),
             "personas": len(d["_pers"]),
             "desde": str(min(d["_dias"])) if d["_dias"] else "",
@@ -399,3 +402,105 @@ def costo_por_trabajador(desde=None, hasta=None, path=None) -> list:
             "labores": sorted(labores.get(rut, [])),
         })
     return sorted(salida, key=lambda x: -(x["costo"] or 0))
+
+
+# ── Costo de cada fila, para repartirlo por labor, cultivo y mes ───────────
+
+
+def _tabla_costos(personas, pagos, filas) -> dict:
+    """Costo por jornada de cada persona y mes, y de la cuadrilla por mes.
+
+    {"planta": {(rut, mes): $/jornada}, "temporal": {mes: $/jornada}}
+
+    Un mes sin pagos NO entra: quien consulte recibe None y muestra "sin datos",
+    nunca cero. Un cero se lee como "salio gratis" y es mentira.
+    """
+    jh_mes, _, _, jh_planta_mes = _jornadas_por_persona(filas, personas)
+    jh_cuadrilla = {}
+    for f in filas:
+        if not f["fecha"] or not f["personas"]:
+            continue
+        mes = "%04d-%02d" % (f["fecha"].year, f["fecha"].month)
+        parte = f["jornadas"] / len(f["personas"])
+        for p in f["personas"]:
+            if not _persona_de(p, personas)[0]:
+                jh_cuadrilla[mes] = jh_cuadrilla.get(mes, 0) + parte
+
+    planta = {}
+    for (rut, mes), jh in jh_mes.items():
+        base = pagos["planta"].get(rut, {}).get(mes)
+        if not base or not jh:
+            continue
+        prev = pagos["previred"].get(mes, 0)
+        cuota = prev * jh / jh_planta_mes[mes] if jh_planta_mes.get(mes) else 0
+        planta[(rut, mes)] = (base + cuota) / jh
+
+    temporal = {}
+    for mes, jh in jh_cuadrilla.items():
+        total = pagos["temporal"].get(mes)
+        if total and jh:
+            temporal[mes] = total / jh
+    return {"planta": planta, "temporal": temporal}
+
+
+def _costo_fila(f, personas, tabla):
+    """Costo de una fila de bitacora, o None si no hay con que calcularlo."""
+    if not f["fecha"] or not f["personas"]:
+        return None
+    mes = "%04d-%02d" % (f["fecha"].year, f["fecha"].month)
+    parte = f["jornadas"] / len(f["personas"])
+    total, visto = 0.0, False
+    for p in f["personas"]:
+        rut = _persona_de(p, personas)[0]
+        cj = tabla["planta"].get((rut, mes)) if rut else tabla["temporal"].get(mes)
+        if cj is None:
+            continue
+        total += cj * parte
+        visto = True
+    return total if visto else None
+
+
+def _con_costo(desde, hasta, path):
+    """(filas del rango, personas, tabla de costos). Base de las tres vistas."""
+    personas = _personas_del_master(path)
+    pagos = pagos_por_mes(path)
+    filas = [f for f in _leer_bitacora(path) if _en_rango(f["fecha"], desde, hasta)]
+    return filas, personas, _tabla_costos(personas, pagos, filas)
+
+
+def _sumar(acc, clave, plantilla, f, costo):
+    d = acc.setdefault(clave, dict(plantilla, jornadas=0.0, costo=None,
+                                   _dias=set()))
+    d["jornadas"] += f["jornadas"]
+    d["_dias"].add(f["fecha"])
+    if costo is not None:
+        d["costo"] = (d["costo"] or 0) + costo
+    return d
+
+
+def por_cultivo_sector(desde=None, hasta=None, path=None) -> list:
+    """Jornadas, dias y costo abiertos por cultivo y sector."""
+    filas, personas, tabla = _con_costo(desde, hasta, path)
+    acc = {}
+    for f in filas:
+        k = (f["cultivo"] or "SIN CULTIVO", f["sector"])
+        _sumar(acc, k, {"cultivo": k[0], "sector": k[1]}, f,
+               _costo_fila(f, personas, tabla))
+    salida = [dict(d, dias=len(d.pop("_dias"))) for d in acc.values()]
+    return sorted(salida, key=lambda x: -x["jornadas"])
+
+
+def evolucion_mensual(desde=None, hasta=None, path=None) -> list:
+    """Jornadas y costo por mes, abiertos por labor."""
+    filas, personas, tabla = _con_costo(desde, hasta, path)
+    acc = {}
+    for f in filas:
+        if not f["fecha"]:
+            continue
+        mes = "%04d-%02d" % (f["fecha"].year, f["fecha"].month)
+        d = _sumar(acc, mes, {"mes": mes, "por_labor": {}}, f,
+                   _costo_fila(f, personas, tabla))
+        g = grupo_de(f["actividad"])
+        d["por_labor"][g] = d["por_labor"].get(g, 0) + f["jornadas"]
+    salida = [dict(d, dias=len(d.pop("_dias"))) for d in acc.values()]
+    return sorted(salida, key=lambda x: x["mes"])

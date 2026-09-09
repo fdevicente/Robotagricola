@@ -463,3 +463,59 @@ def test_con_muy_pocas_jornadas_no_se_publica_un_costo_por_jornada(tmp_path):
     assert j["jornadas"] == 1
     assert j["costo"] == 6000000          # su costo es real y se muestra
     assert j["costo_jornada"] is None     # el costo POR JORNADA no significa nada
+
+
+# ── Costo por labor, por cultivo y por mes ─────────────────────────────────
+
+from modules.labores import evolucion_mensual, por_cultivo_sector   # noqa: E402
+
+
+def test_el_costo_de_una_labor_suma_planta_y_cuadrilla(tmp_path):
+    ruta = _libro_pagos(
+        tmp_path,
+        [("Felicito Amigo Soto", "9.850.887-2")],
+        [("2026-08-20", "TEF  9850887-2 FELICITO AMIGO", 900000,
+          "MANO DE OBRA PLANTA"),
+         ("2026-08-20", "PAGO CUADRILLA", 600000, "MANO DE OBRA TEMPORAL")],
+        [_fila("2026-08-10", "Sacar restos poda nogales", 1, "Felicito Amigo"),
+         _fila("2026-08-10", "Sacar restos poda nogales", 3, "Pedro Soto, Ana Ruiz, Luis Paz")])
+    r = {x["labor"]: x for x in resumen_labores(path=ruta)}["Sacar restos de poda"]
+    assert r["jornadas"] == 4
+    # planta 900.000 / 1 jornada · cuadrilla 600.000 / 3 jornadas
+    assert round(r["costo"]) == 1500000
+
+
+def test_sin_pagos_el_costo_de_la_labor_es_sin_datos(tmp_path):
+    ruta = _libro(tmp_path, [_fila("2026-06-10", "Poda nogales", 2, "A B")])
+    assert resumen_labores(path=ruta)[0]["costo"] is None
+
+
+def test_por_cultivo_abre_las_jornadas(tmp_path):
+    ruta = _libro(tmp_path, [
+        _fila("2026-06-10", "Poda nogales", 2, "A", cultivo="NOGALES", sector="1"),
+        _fila("2026-06-10", "Poda avellanos", 3, "B", cultivo="AVELLANOS", sector="2"),
+    ])
+    r = {(x["cultivo"], x["sector"]): x for x in por_cultivo_sector(path=ruta)}
+    assert r[("NOGALES", "1")]["jornadas"] == 2
+    assert r[("AVELLANOS", "2")]["jornadas"] == 3
+
+
+def test_la_evolucion_va_por_mes(tmp_path):
+    ruta = _libro(tmp_path, [
+        _fila("2026-06-10", "Poda nogales", 2, "A"),
+        _fila("2026-07-10", "Poda nogales", 5, "A"),
+    ])
+    meses = {x["mes"]: x for x in evolucion_mensual(path=ruta)}
+    assert meses["2026-06"]["jornadas"] == 2
+    assert meses["2026-07"]["jornadas"] == 5
+    assert [x["mes"] for x in evolucion_mensual(path=ruta)] == ["2026-06", "2026-07"]
+
+
+def test_la_evolucion_abre_por_labor(tmp_path):
+    ruta = _libro(tmp_path, [
+        _fila("2026-06-10", "Poda nogales", 2, "A"),
+        _fila("2026-06-10", "Aplicación herbicida", 1, "B"),
+    ])
+    m = evolucion_mensual(path=ruta)[0]
+    assert m["por_labor"]["Poda"] == 2
+    assert m["por_labor"]["Aplicación herbicida"] == 1
