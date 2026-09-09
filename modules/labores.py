@@ -193,6 +193,12 @@ CAT_TEMPORAL = "MANO DE OBRA TEMPORAL"
 # 9-sep-2026: "saber cuanto me cuesta cada trabajador (sin considerar el mio)".
 FUERA = ("CRAVE SPA", "77912665", "FELIX DE VICENT", "9359341", "17407271")
 
+# Bajo esto, dividir el sueldo por las jornadas no significa nada. Juan es jefe
+# de campo: reporta los partes y casi no se anota a si mismo. Medido, tiene 1
+# jornada y $6.388.889 en tres meses, o sea $6.412.067 la jornada. Su costo se
+# muestra igual --es plata real--, pero el costo POR JORNADA queda sin datos.
+MIN_JORNADAS = 5
+
 
 def rut_key(v) -> str:
     """RUT normalizado '9850887-2', o '' si no hay uno."""
@@ -280,3 +286,116 @@ def pagos_por_mes(path=None) -> dict:
     except Exception as e:
         logger.warning("labores: no pude leer los pagos: %r", e)
     return salida
+
+
+# ── Costo por trabajador ───────────────────────────────────────────────────
+
+
+def _personas_del_master(path=None) -> dict:
+    """{clave del nombre: (rut, nombre legal)} desde la hoja Personal."""
+    from openpyxl import load_workbook
+
+    from config import EXCEL_PATH
+    salida = {}
+    try:
+        wb = load_workbook(path or EXCEL_PATH, read_only=True, data_only=True)
+        try:
+            if PERSONAL_SHEET not in wb.sheetnames:
+                return {}
+            for r in wb[PERSONAL_SHEET].iter_rows(min_row=2, values_only=True):
+                if not r or not r[0]:
+                    continue
+                salida[_clave(r[0])] = (rut_key(r[1]), str(r[0]))
+        finally:
+            wb.close()
+    except Exception as e:
+        logger.warning("labores: no pude leer Personal: %r", e)
+    return salida
+
+
+def _persona_de(nombre, personas) -> tuple:
+    """(rut, nombre legal) de un nombre de la bitacora, o (None, None).
+
+    La bitacora usa el nombre canonico ("Ramiro Amigo") y Personal el legal
+    ("Luis Ramiro Amigo Soto"). Se calza por SUBCONJUNTO DE PALABRAS, no por
+    prefijo: medido contra el Master, por prefijo "Ramiro Amigo" no calzaba con
+    "Luis Ramiro Amigo Soto" ni "Patricio Mora" con "Luis Patricio Mora Amigo",
+    y tres de los seis quedaban con cero jornadas.
+
+    Se exigen DOS palabras en comun y un unico candidato. Con una sola palabra,
+    "Amigo" calzaria con tres personas distintas y "Juan" con Juan Parada,
+    cuando en la cuadrilla hay cuatro Juanes y ninguno es el.
+    """
+    k = _clave(nombre)
+    if not k:
+        return (None, None)
+    if k in personas:
+        return personas[k]
+    palabras = set(k.split())
+    if len(palabras) < 2:
+        return (None, None)
+    candidatos = [v for kp, v in personas.items()
+                  if palabras <= set(kp.split())]
+    return candidatos[0] if len(candidatos) == 1 else (None, None)
+
+
+def _jornadas_por_persona(filas, personas) -> tuple:
+    """(jh por (rut, mes), jh total por rut, labores por rut, jh de planta por mes).
+
+    Una fila de 2 jornadas con dos personas es UNA jornada de cada una.
+    """
+    jh_mes, jh_total, labores, jh_planta_mes = {}, {}, {}, {}
+    for f in filas:
+        if not f["fecha"] or not f["personas"]:
+            continue
+        mes = "%04d-%02d" % (f["fecha"].year, f["fecha"].month)
+        parte = f["jornadas"] / len(f["personas"])
+        for p in f["personas"]:
+            rut, _ = _persona_de(p, personas)
+            if not rut:
+                continue
+            jh_mes[(rut, mes)] = jh_mes.get((rut, mes), 0) + parte
+            jh_total[rut] = jh_total.get(rut, 0) + parte
+            jh_planta_mes[mes] = jh_planta_mes.get(mes, 0) + parte
+            labores.setdefault(rut, set()).add(grupo_de(f["actividad"]))
+    return jh_mes, jh_total, labores, jh_planta_mes
+
+
+def costo_por_trabajador(desde=None, hasta=None, path=None) -> list:
+    """Por persona: jornadas, pagado, previred imputado, costo y costo/jornada.
+
+    Sin pagos cargados el costo queda en None y la pantalla dice "sin datos".
+    Nunca cero: un cero se lee como "salio gratis".
+    """
+    personas = _personas_del_master(path)
+    pagos = pagos_por_mes(path)
+    filas = [f for f in _leer_bitacora(path) if _en_rango(f["fecha"], desde, hasta)]
+    jh_mes, jh_total, labores, jh_planta_mes = _jornadas_por_persona(filas, personas)
+
+    salida = []
+    for rut, nombre in personas.values():
+        if not rut:
+            continue
+        meses = pagos["planta"].get(rut, {})
+        # Solo la plata de los meses que caen en el rango pedido.
+        meses = {m: v for m, v in meses.items() if not filas or m in jh_planta_mes}
+        pagado = sum(meses.values())
+        previred = 0.0
+        for mes, total_mes in pagos["previred"].items():
+            mias, todas = jh_mes.get((rut, mes), 0), jh_planta_mes.get(mes, 0)
+            if todas and mias:
+                previred += total_mes * mias / todas
+        jornadas = jh_total.get(rut, 0)
+        costo = (pagado + previred) if meses else None
+        salida.append({
+            "persona": nombre,
+            "rut": rut,
+            "jornadas": jornadas,
+            "pagado": pagado if meses else None,
+            "previred": previred,
+            "costo": costo,
+            "costo_jornada": ((costo / jornadas)
+                              if costo and jornadas >= MIN_JORNADAS else None),
+            "labores": sorted(labores.get(rut, [])),
+        })
+    return sorted(salida, key=lambda x: -(x["costo"] or 0))
