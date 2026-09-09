@@ -45,3 +45,43 @@ def test_los_botones_se_atienden_antes_que_los_flujos():
 
 def test_el_flujo_de_horometro_se_atiende_en_el_dispatcher():
     assert "horo_state" in inspect.getsource(chat.handle_text)
+
+
+# ── El horómetro NO puede saltarse la caducidad de flujos ──────────────────
+# 🔴 Pasó el 9-sep-2026. El flujo guiado de horómetro se agregó el 7-sep POR
+# ENCIMA de `revisar_flujos`, así que quedó siendo el único flujo inmune a
+# caducar. Juan dejó un horómetro a medias probándolo el 8-sep a las 16:23, y al
+# día siguiente mandó CINCO partes --3, 4, 7, 8 y 9 de septiembre-- que se los
+# comió ese flujo, uno por uno, sin una línea en el log. En el pickle quedó
+# `horo_state='esperando_termino'` y `flujo_ts` SIN CREAR: prueba de que
+# `revisar_flujos` nunca llegó a correr.
+#
+# Es exactamente el bug del 28-ago con el /deposito, otra vez, contra el guardia
+# que se construyó para evitarlo.
+
+
+def test_los_flujos_vencidos_se_sueltan_ANTES_de_atender_el_horometro():
+    fuente = inspect.getsource(chat.handle_text)
+    assert fuente.index("revisar_flujos(") < fuente.index('get("horo_state")'), (
+        "revisar_flujos tiene que correr antes del paso de horómetro; si no, un "
+        "horómetro a medias es inmune a caducar y se come todo lo que llegue")
+
+
+def test_un_horometro_vencido_no_se_come_el_parte_del_dia_siguiente():
+    """El caso real: horómetro abierto ayer, parte de asistencia hoy."""
+    import time
+    from modules.flujos import revisar_flujos
+    ud = {"horo_state": "esperando_termino", "horo_data": {"inicio": 1950},
+          "flujo_ts": time.time() - 20 * 3600}          # abierto hace 20 horas
+    assert revisar_flujos(ud) == "horo"
+    assert not ud.get("horo_state")
+    assert not ud.get("horo_data")
+
+
+def test_un_horometro_recien_abierto_sigue_vivo():
+    """No se puede cerrar el flujo de alguien que está contestando."""
+    import time
+    from modules.flujos import revisar_flujos
+    ud = {"horo_state": "esperando_termino", "flujo_ts": time.time() - 60}
+    assert revisar_flujos(ud) is None
+    assert ud["horo_state"] == "esperando_termino"

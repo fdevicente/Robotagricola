@@ -34,20 +34,27 @@ async def handle_text(update, context):
         await atender_boton(update, context, _boton)
         return
 
-    # ── Flujo guiado de horómetro en curso ──
-    if context.user_data.get("horo_state"):
-        from handlers.horometro_h import atender_paso
-        if await atender_paso(update, context):
-            return
-
     # ── Flujos vencidos: se sueltan ANTES de repartir ──
     # Un flujo a medias se queda con todo el texto que llegue. El 28-ago-2026
     # un /deposito sin cerrar se comio 12 dias de partes de Juan en silencio.
+    #
+    # 🔴 Y VA ANTES DEL HOROMETRO, no despues. Cuando el flujo guiado se agrego
+    # el 7-sep quedo POR ENCIMA de esta linea, o sea inmune a caducar: era el
+    # unico. Juan dejo un horometro a medias probandolo el 8-sep a las 16:23 y
+    # al dia siguiente mando CINCO partes --3, 4, 7, 8 y 9 de septiembre-- que
+    # se comio ese flujo uno por uno, sin una linea en el log. El mismo bug del
+    # /deposito, contra el guardia construido para evitarlo.
     descartado = revisar_flujos(context.user_data)
     if descartado:
         await update.message.reply_text(
             f"🧹 Cancelé el {descartado} que quedó a medias "
             f"(más de {MINUTOS_VIDA} min sin terminar). Sigo con tu mensaje.")
+
+    # ── Flujo guiado de horómetro en curso ──
+    if context.user_data.get("horo_state"):
+        from handlers.horometro_h import atender_paso
+        if await atender_paso(update, context):
+            return
 
     # ── Flujos activos (orden de prioridad) ──
     if await handle_text_deposito(update, context):
