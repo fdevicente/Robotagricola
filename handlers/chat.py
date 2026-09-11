@@ -6,9 +6,30 @@ Si no hay flujo, usa el chat inteligente.
 import logging
 
 from chat_inteligente import responder_chat
-from modules.flujos import MINUTOS_VIDA, revisar_flujos
+from modules.flujos import (MINUTOS_VIDA, comando_con_espacio,
+                            revisar_flujos)
+
 
 logger = logging.getLogger(__name__)
+
+
+def _comandos_registrados(context) -> set:
+    """Los comandos que el bot tiene de verdad, sacados de PTB.
+
+    Se leen de los handlers y no de una lista escrita a mano: una lista
+    aparte envejece, y ofrecerle a Juan un comando que ya no existe es
+    peor que no decirle nada.
+    """
+    from telegram.ext import CommandHandler
+    nombres = set()
+    try:
+        for grupo in context.application.handlers.values():
+            for h in grupo:
+                if isinstance(h, CommandHandler):
+                    nombres |= {str(c).lower() for c in h.commands}
+    except Exception:                       # pragma: no cover
+        pass
+    return nombres
 
 
 async def handle_text(update, context):
@@ -32,6 +53,28 @@ async def handle_text(update, context):
     if _boton:
         from handlers.horometro_h import atender_boton
         await atender_boton(update, context, _boton)
+        return
+
+    # ── "/ comando" con espacio ──
+    # Telegram solo marca como comando lo que va PEGADO a la barra, asi que
+    # "/ uso" llega como texto normal. Va ANTES de repartir: si no, se lo come
+    # el primer flujo abierto, que es justo lo que paso el 28-ago con
+    # "/ cancelar" y el 10-sep con "/ uso".
+    _cmd = comando_con_espacio(update.message.text, _comandos_registrados(context))
+    if _cmd:
+        if _cmd == "cancelar":
+            from modules.flujos import limpiar_flujos
+            limpiar_flujos(context.user_data)
+            await update.message.reply_text(
+                "🧹 Listo, cancelé lo que estaba a medias.\n"
+                "Ojo: escribiste */ cancelar* con un espacio y Telegram no lo "
+                "toma como comando. La próxima, */cancelar* pegado.",
+                parse_mode="Markdown")
+        else:
+            await update.message.reply_text(
+                "Escribiste */ %s* con un espacio y Telegram no lo toma como "
+                "comando, así que no hice nada.\nEscribilo pegado: */%s*"
+                % (_cmd, _cmd), parse_mode="Markdown")
         return
 
     # ── Flujos vencidos: se sueltan ANTES de repartir ──

@@ -103,3 +103,48 @@ def test_cualquier_flujo_abierto_vence(clave):
     ud = {clave: "en_curso", "flujo_ts": 0.0}
     assert revisar_flujos(ud, ahora=(MINUTOS_VIDA + 1) * MIN) is not None
     assert not ud.get(clave)
+
+# ── "/ comando" con espacio ────────────────────────────────────────────────
+# 🔴 Tercera vez que este espacio hace daño:
+#   28-ago: "/ cancelar" dejó un /deposito abierto que se comió 12 días.
+#   10-sep: "/ uso" hizo que "Ripper full" y "60 litros en nogales" cayeran
+#           como texto libre en la bitácora. Los 60 L nunca se descontaron y el
+#           inventario quedó con un "Katana" en -5.
+# Telegram solo marca como comando lo que va PEGADO a la barra, así que estos
+# mensajes llegan como texto normal y nadie los reconoce.
+
+from modules.flujos import comando_con_espacio
+
+COMANDOS = {"uso", "cancelar", "bitacora", "inventario", "deposito"}
+
+
+def test_reconoce_el_comando_escrito_con_espacio():
+    assert comando_con_espacio("/ uso", COMANDOS) == "uso"
+    assert comando_con_espacio("/ cancelar", COMANDOS) == "cancelar"
+    assert comando_con_espacio("/  bitacora  ", COMANDOS) == "bitacora"
+
+
+def test_no_confunde_un_comando_bien_escrito():
+    """Ese ya lo atiende Telegram: acá no tiene que hacer nada."""
+    assert comando_con_espacio("/uso", COMANDOS) is None
+
+
+def test_no_reconoce_lo_que_no_es_un_comando():
+    """Inventar comandos sería peor que no hacer nada."""
+    assert comando_con_espacio("/ hola", COMANDOS) is None
+    assert comando_con_espacio("/ ", COMANDOS) is None
+    assert comando_con_espacio("/", COMANDOS) is None
+
+
+def test_un_parte_que_empieza_con_barra_no_es_un_comando():
+    """Juan escribió "Tractor /massey ferguson 6711" y eso NO es un comando."""
+    assert comando_con_espacio("Tractor /massey ferguson 6711", COMANDOS) is None
+    assert comando_con_espacio("60 litros en nogales", COMANDOS) is None
+    assert comando_con_espacio("", COMANDOS) is None
+    assert comando_con_espacio(None, COMANDOS) is None
+
+
+def test_solo_la_primera_linea_cuenta():
+    """Un parte largo que en la línea 3 diga "/ uso" no abre un flujo."""
+    assert comando_con_espacio("Lunes 7 de septiembre\nFelicito poda\n/ uso",
+                               COMANDOS) is None

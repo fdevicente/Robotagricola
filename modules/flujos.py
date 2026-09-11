@@ -17,6 +17,7 @@ mandaba un parte cada ~80 s: un timeout "desde el ultimo mensaje" se habria
 refrescado con cada intento fallido y no habria vencido nunca.
 """
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -96,3 +97,30 @@ def revisar_flujos(user_data, ahora: float | None = None) -> str | None:
     logger.info("Flujo(s) vencido(s) tras %d min, se descartan: %s",
                 MINUTOS_VIDA, ", ".join(abiertos))
     return abiertos[0]
+
+
+def comando_con_espacio(texto, comandos) -> str | None:
+    """El comando que quiso escribir, si le puso un espacio tras la barra.
+
+    Telegram solo marca como comando lo que va PEGADO a la barra: "/ uso" llega
+    como texto normal y nadie lo reconoce. Es la TERCERA vez que ese espacio
+    hace daño:
+
+      28-ago-2026: "/ cancelar" dejo un /deposito abierto que se comio 12 dias
+                   de partes.
+      10-sep-2026: "/ uso" hizo que "Ripper full" y "60 litros en nogales"
+                   cayeran como texto libre en la bitacora. Los 60 L nunca se
+                   descontaron y el inventario quedo con un "Katana" en -5.
+
+    Solo mira la PRIMERA linea: un parte largo que en la linea 3 diga "/ uso"
+    no puede abrir un flujo. Y solo devuelve comandos que existen de verdad:
+    inventar uno seria peor que no hacer nada.
+    """
+    linea = str(texto or "").strip().splitlines()[:1]
+    if not linea:
+        return None
+    m = re.match(r"^/\s+(\w+)\s*$", linea[0].strip())
+    if not m:
+        return None
+    nombre = m.group(1).lower()
+    return nombre if nombre in comandos else None

@@ -3,6 +3,8 @@ inventario_manager.py — Gestión de Inventario y Uso por Cultivo
 Hojas: Inventario, Aplicaciones
 """
 import logging
+import re
+import unicodedata
 from datetime import date, datetime
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
@@ -27,8 +29,8 @@ CATEGORIAS = ["Fertilizante", "Fungicida", "Herbicida", "Insecticida", "Semilla"
 CULTIVOS = ["Nogales", "Cerezos", "Avellanos"]
 
 
-def _open_wb():
-    return load_workbook(EXCEL_PATH)
+def _open_wb(path=None):
+    return load_workbook(path or EXCEL_PATH)
 
 
 def _create_sheet(wb, name, headers, widths, color):
@@ -68,14 +70,61 @@ def crear_hojas_inventario():
     _save_wb(wb)
 
 
+MIN_LETRAS = 3
+
+
+def _clave_prod(t) -> str:
+    """Minusculas, sin tildes y con los espacios colapsados."""
+    t = "".join(c for c in unicodedata.normalize("NFD", str(t or "").lower())
+                if unicodedata.category(c) != "Mn")
+    return " ".join(re.sub(r"[^a-z0-9 ]", " ", t).split())
+
+
+def buscar_producto(nombres, consulta):
+    """(indice del producto, candidatos si es ambiguo). Puro: recibe la lista.
+
+    🔴 EL 10-SEP-2026 ESTO EXIGIA COINCIDENCIA EXACTA. Juan escribio "Katana",
+    el inventario dice "KATANA 1 KG - herbicida", no calzo, y registrar_uso creo
+    una fila NUEVA con stock -5 sin avisarle a nadie.
+
+    Ahora el nombre corto calza con el comercial largo. Pero NO SE ADIVINA: hay
+    TRES filas de Ripper Full, y elegir una al azar es peor que preguntar. Si
+    hay mas de una candidata se devuelven todas y que decida quien pregunte.
+    """
+    k = _clave_prod(consulta)
+    if len(k.replace(" ", "")) < MIN_LETRAS:
+        return None, []                      # "k" no identifica nada
+
+    claves = [_clave_prod(n) for n in nombres]
+    for i, c in enumerate(claves):
+        if c == k:
+            return i, []                     # el exacto gana siempre
+
+    cand = [i for i, c in enumerate(claves) if c.startswith(k) or k in c]
+    if len(cand) == 1:
+        return cand[0], []
+    return None, [nombres[i] for i in cand]
+
+
 def _find_producto(ws, producto: str):
-    """Busca un producto en inventario. Retorna row_idx o None."""
-    prod_lower = producto.strip().lower()
+    """Busca un producto en inventario. Retorna row_idx, o None si no hay
+    ninguno o si hay VARIOS candidatos --ahi hay que preguntar, no elegir."""
+    nombres, filas = [], []
     for row_idx in range(2, ws.max_row + 1):
         val = ws.cell(row=row_idx, column=1).value
-        if val and str(val).strip().lower() == prod_lower:
-            return row_idx
-    return None
+        if val:
+            nombres.append(str(val))
+            filas.append(row_idx)
+    idx, _ = buscar_producto(nombres, producto)
+    return filas[idx] if idx is not None else None
+
+
+def candidatos_producto(ws, producto: str) -> list:
+    """Los nombres que calzan cuando hay mas de uno. Vacia si no hay duda."""
+    nombres = [str(ws.cell(row=r, column=1).value)
+               for r in range(2, ws.max_row + 1)
+               if ws.cell(row=r, column=1).value]
+    return buscar_producto(nombres, producto)[1]
 
 
 def agregar_stock(producto: str, cantidad: float, categoria: str = "Otro",
@@ -104,7 +153,7 @@ def agregar_stock(producto: str, cantidad: float, categoria: str = "Otro",
 def registrar_uso(producto: str, cantidad: float, cultivo: str,
                   sector: str = "", responsable: str = "",
                   observaciones: str = "", fecha: str = "",
-                  unidad: str = "") -> dict:
+                  unidad: str = "", path: str = None) -> dict:
     """Registra uso de un producto y descuenta del inventario.
 
     `fecha` es la del TRABAJO, no la de hoy: Juan reporta las aplicaciones days
@@ -113,12 +162,24 @@ def registrar_uso(producto: str, cantidad: float, cultivo: str,
     coincidir, y rotular kilos de fungicida como litros no es un detalle.
     Las dos caen a lo de antes si no vienen.
     """
-    wb = _open_wb()
+    if not _clave_prod(producto):
+        # Asi nacio la fila con el producto en blanco el 10-sep-2026.
+        return {"error": "sin_producto", "producto": producto}
+
+    wb = _open_wb(path)
     ws_inv = _ensure_inventario(wb)
     ws_app = _ensure_aplicaciones(wb)
 
+    dudosos = candidatos_producto(ws_inv, producto)
+    if dudosos:
+        # Hay TRES filas de Ripper Full: elegir una al azar es peor que
+        # preguntar. No se escribe nada y que decida quien pregunte.
+        wb.close()
+        return {"error": "ambiguo", "producto": producto, "candidatos": dudosos}
+
     row_idx = _find_producto(ws_inv, producto)
     cuando = (fecha or "")[:10] or date.today().strftime("%Y-%m-%d")
+    desconocido = row_idx is None
 
     if row_idx:
         stock_actual = float(ws_inv.cell(row=row_idx, column=4).value or 0)
@@ -127,21 +188,28 @@ def registrar_uso(producto: str, cantidad: float, cultivo: str,
         ws_inv.cell(row=row_idx, column=4).value = nuevo_stock
         ws_inv.cell(row=row_idx, column=7).value = cuando
     else:
+        # 🔴 ANTES SE CREABA UNA FILA CON STOCK NEGATIVO Y SIN AVISAR: asi
+        # nacieron "Katana -5" y "Agrocupper -2,1". El uso SI se anota --el
+        # trabajo se hizo-- pero el inventario no se inventa un producto.
         unidad = unidad or "L"
-        nuevo_stock = -cantidad
-        ws_inv.append([producto, "Otro", unidad, nuevo_stock, 0, "", cuando])
+        nuevo_stock = None
+        logger.warning("Uso de un producto que no esta en el inventario: %r",
+                       producto)
 
     ws_app.append([
         cuando, producto, cantidad, unidad, cultivo,
         sector, responsable, observaciones
     ])
 
-    _save_wb(wb)
-    alerta = nuevo_stock <= float(ws_inv.cell(row=row_idx, column=5).value or 0) if row_idx else True
+    _save_wb(wb, path)
+    minimo = float(ws_inv.cell(row=row_idx, column=5).value or 0) if row_idx else 0
     return {
         "producto": producto, "cantidad": cantidad, "unidad": unidad,
         "cultivo": cultivo, "sector": sector,
-        "stock_restante": nuevo_stock, "alerta_bajo": alerta
+        "stock_restante": nuevo_stock,
+        "alerta_bajo": (nuevo_stock is not None and nuevo_stock <= minimo),
+        "stock_negativo": (nuevo_stock is not None and nuevo_stock < 0),
+        "producto_desconocido": desconocido,
     }
 
 

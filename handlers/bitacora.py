@@ -15,6 +15,19 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 logger = logging.getLogger(__name__)
 
 
+def _resto_inventario(res) -> str:
+    """Como se cuenta el stock que queda, sin mentir cuando no se sabe.
+
+    `stock_restante` viene en None cuando el producto NO esta en el inventario:
+    desde el 11-sep-2026 ya no se le inventa una fila en negativo. Formatearlo
+    con %g reventaba, y poner un 0 diria que se acabo, que es otra mentira.
+    """
+    v = res.get("stock_restante")
+    if v is None:
+        return "\\(no está en el inventario\\)"
+    return "\\(quedan %g\\)" % v
+
+
 def _esc(t):
     if t is None:
         return ""
@@ -223,7 +236,9 @@ async def auto_guardar_bitacora(update, context):
                 registrar_uso, campos["insumo"], float(campos["cantidad"]),
                 campos.get("cultivo", "GENERAL"), campos.get("sector", ""),
                 registrado_por, texto[:60])
-            msg_inv = f"\n📦 {_esc(campos['insumo'])} \\-{campos['cantidad']:g} (quedan {r.get('stock_restante', 0):g})"
+            msg_inv = ("\n📦 %s \\-%g %s" % (_esc(campos['insumo']),
+                                            campos['cantidad'],
+                                            _resto_inventario(r)))
         except Exception as e:
             logger.warning(f"Auto-bitácora: no pude descontar inventario: {e}")
 
@@ -307,9 +322,10 @@ async def cb_bita_save(update, context):
                 campos.get("cultivo", "GENERAL"), campos.get("sector", ""),
                 registrado_por, campos.get("texto_original", "")[:60])
             alerta = " ⚠️ *stock bajo*" if res.get("alerta_bajo") else ""
-            msg_inv = (f"\n📦 Inventario: {_esc(campos['insumo'])} "
-                       f"\\-{campos['cantidad']:g} {_esc(res.get('unidad',''))} "
-                       f"\\(quedan {res.get('stock_restante', 0):g}\\){alerta}")
+            msg_inv = ("\n📦 Inventario: %s \\-%g %s %s%s"
+                       % (_esc(campos['insumo']), campos['cantidad'],
+                          _esc(res.get('unidad', '')),
+                          _resto_inventario(res), alerta))
         except Exception as e:
             logger.warning(f"No pude descontar inventario: {e}")
             msg_inv = "\n📦 _No pude descontar el inventario \\(revisar\\)_"

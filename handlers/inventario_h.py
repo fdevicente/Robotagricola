@@ -53,14 +53,46 @@ async def cb_cultivo(update, context):
     result = await asyncio.to_thread(
         registrar_uso, data.get("producto", ""), data.get("cantidad", 0),
         cultivo, data.get("sector", ""))
+    # Un nombre ambiguo NO se resuelve al azar: se pregunta. El flujo se queda
+    # abierto esperando el nombre bueno.
+    if result.get("error") == "ambiguo":
+        opciones = "\n".join("• %s" % esc(c) for c in result["candidatos"])
+        await query.edit_message_text(
+            "🤔 *%s* calza con más de un producto y no quiero elegir por ti:\n\n"
+            "%s\n\nEscribe el nombre completo del que usaste."
+            % (esc(result["producto"]), opciones), parse_mode="Markdown")
+        context.user_data["uso_state"] = "esperando_producto"
+        return
+
+    if result.get("error") == "sin_producto":
+        await query.edit_message_text("🤔 No entendí qué producto usaste. "
+                                      "Empieza de nuevo con /uso.")
+        context.user_data["uso_state"] = None
+        context.user_data["uso_data"] = {}
+        return
+
     context.user_data["uso_state"] = None
     context.user_data["uso_data"] = {}
-    alerta = "\n⚠️ *Stock bajo!*" if result.get("alerta_bajo") else ""
+
+    # El stock puede venir en None: el producto no esta en el inventario y ya
+    # no se le inventa una fila en negativo.
+    if result.get("producto_desconocido"):
+        stock = ("⚠️ *%s* no está en el inventario, así que anoté el uso pero no "
+                 "pude descontarlo. Revisa el nombre." % esc(result["producto"]))
+    elif result.get("stock_negativo"):
+        stock = ("⚠️ *Stock en rojo:* queda en %g %s. O falta cargar una compra, "
+                 "o la cantidad no es esa."
+                 % (result["stock_restante"], result["unidad"]))
+    else:
+        alerta = "  ⚠️ *bajo!*" if result.get("alerta_bajo") else ""
+        stock = "📦 Stock restante: %g %s%s" % (result["stock_restante"],
+                                                result["unidad"], alerta)
+
     await query.edit_message_text(
         f"✅ *Uso registrado*\n\n"
         f"🧪 {esc(result['producto'])} — {result['cantidad']:g} {result['unidad']}\n"
         f"🌳 Cultivo: {cultivo}\n"
-        f"📦 Stock restante: {result['stock_restante']:g} {result['unidad']}{alerta}",
+        f"{stock}",
         parse_mode="Markdown")
 
 

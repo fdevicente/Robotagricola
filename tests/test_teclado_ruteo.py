@@ -85,3 +85,12 @@ def test_un_horometro_recien_abierto_sigue_vivo():
     ud = {"horo_state": "esperando_termino", "flujo_ts": time.time() - 60}
     assert revisar_flujos(ud) is None
     assert ud["horo_state"] == "esperando_termino"
+
+
+def test_el_comando_con_espacio_se_mira_antes_de_repartir():
+    """Si se mirara después, el primer flujo abierto se lo come — que es
+    exactamente lo que pasó el 28-ago con "/ cancelar" y el 10-sep con "/ uso"."""
+    fuente = inspect.getsource(chat.handle_text)
+    assert (fuente.index("comando_con_espacio(")
+            < fuente.index("revisar_flujos(")
+            < fuente.index("await handle_text_deposito"))
