@@ -305,3 +305,35 @@ def agregar_stock_desde_factura(items: list):
             agregados.append(result)
 
     return agregados
+
+
+def agrupar_duplicados(productos) -> list:
+    """Grupos de filas que son EL MISMO producto escrito distinto.
+
+    `productos`: dicts con al menos "nombre". Devuelve solo los grupos de 2 o mas.
+
+    ⚠️ LA REGLA ES PREFIJO DE PALABRAS, no primera palabra. Medido contra el
+    Master: agrupar por la primera palabra juntaria los CUATRO Defender --Zn,
+    Calcio, K (Potasio) y Boro-- que son productos distintos. En cambio
+    "Ripper Full" SI es prefijo de "RIPPER FULL SL 20 LT - herbicida", y son el
+    mismo.
+    """
+    def _prefijo(a, b):
+        pa, pb = a.split(), b.split()
+        return len(pa) <= len(pb) and pb[:len(pa)] == pa
+
+    claves = [_clave_prod(p.get("nombre")) for p in productos]
+    grupos, usados = [], set()
+    for i, k in enumerate(claves):
+        if i in usados or not k:
+            continue
+        grupo, usados = [productos[i]], usados | {i}
+        for j, o in enumerate(claves):
+            if j in usados or not o:
+                continue
+            if _prefijo(k, o) or _prefijo(o, k):
+                grupo.append(productos[j])
+                usados.add(j)
+        if len(grupo) > 1:
+            grupos.append(grupo)
+    return grupos

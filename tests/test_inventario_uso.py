@@ -155,3 +155,47 @@ def test_si_el_stock_no_alcanza_se_anota_pero_se_avisa(tmp_path):
     inv, _ = _leer(ruta)
     assert r["stock_negativo"] is True
     assert inv[0][3] == -3
+
+
+# ── Unificar productos repetidos ───────────────────────────────────────────
+# El dueño, 11-sep-2026: "deberían tomar por el nombre, y unificarlos en uno
+# solo". Medido contra el Master: "Ripper Full" está tres veces (20 + 80 + 60 L)
+# y "Agrocupper" dos.
+#
+# ⚠️ EL CASO QUE ROMPE: agrupar por la primera palabra juntaría los CUATRO
+# Defender --Zn, Calcio, K (Potasio) y Boro-- que son productos DISTINTOS. La
+# regla tiene que ser que un nombre completo sea PREFIJO DE PALABRAS del otro.
+
+from inventario_manager import agrupar_duplicados   # noqa: E402
+
+
+def test_las_tres_filas_de_ripper_full_son_un_solo_producto():
+    prods = [{"nombre": "Ripper Full", "unidad": "L", "categoria": "Herbicida", "stock": 20},
+             {"nombre": "RIPPER FULL SL - herbicida fitosanitario", "unidad": "L",
+              "categoria": "Herbicida", "stock": 80},
+             {"nombre": "RIPPER FULL SL 20 LT - herbicida", "unidad": "L",
+              "categoria": "Herbicida", "stock": 60}]
+    grupos = agrupar_duplicados(prods)
+    assert len(grupos) == 1
+    assert len(grupos[0]) == 3
+
+
+def test_los_cuatro_Defender_son_productos_DISTINTOS():
+    """Comparten la primera palabra y no se pueden juntar: son Zn, Calcio, K y Boro."""
+    prods = [{"nombre": n, "unidad": "L", "categoria": "Fertilizante foliar", "stock": 1}
+             for n in ("Defender Zn", "Defender Calcio", "Defender K (Potasio)",
+                       "Defender Boro")]
+    assert agrupar_duplicados(prods) == []
+
+
+def test_un_producto_solo_no_forma_grupo():
+    prods = [{"nombre": "Nordox Super 75 Wp", "unidad": "Kg",
+              "categoria": "Fungicida", "stock": 3}]
+    assert agrupar_duplicados(prods) == []
+
+
+def test_agrupa_aunque_cambien_mayusculas_y_espacios():
+    prods = [{"nombre": "katana", "unidad": "Kg", "categoria": "Herbicida", "stock": 1},
+             {"nombre": "KATANA  1 KG - herbicida", "unidad": "Kg",
+              "categoria": "Herbicida", "stock": 4}]
+    assert len(agrupar_duplicados(prods)) == 1
