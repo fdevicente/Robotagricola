@@ -293,6 +293,19 @@ async def handle_text_bitacora(update, context) -> bool:
     texto = update.message.text.strip()
     registrado_por = context.user_data.get("bitacora_registrado_por") or (
         update.effective_user.full_name if update.effective_user else "")
+
+    # 🔴 UN PARTE DE ASISTENCIA VA POR EL PARSER DETERMINISTA, ENTRE POR DONDE
+    # ENTRE. El 11-sep-2026 Juan mando tres partes con /bitacora y los tres
+    # quedaron mal: el del 2-sep en UNA fila de 11 jornadas en vez de tres
+    # labores, el del 11-sep en una sola fila tipo OTRO, y el del 10-sep
+    # directamente no quedo. El texto libre ya pasaba por aca y salia bien; solo
+    # este camino mandaba el parte a la IA, que RESUME y pierde quien hizo que.
+    from modules.bitacora_asistencia import parsear_asistencia_multi
+    if parsear_asistencia_multi(texto):
+        context.user_data["bitacora_state"] = None
+        await auto_guardar_bitacora(update, context)
+        return True
+
     await _procesar_texto_bitacora(update.message, context, texto, registrado_por)
     return True
 
