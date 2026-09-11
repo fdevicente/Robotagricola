@@ -6,7 +6,7 @@ import logging
 from telegram import ReplyKeyboardMarkup
 
 from handlers.horometro import PASOS, avanzar, iniciar
-from handlers.teclado import BOTON_HOROMETRO, teclado_capataz, texto_de_ayuda
+from handlers.teclado import teclado_capataz
 
 logger = logging.getLogger(__name__)
 
@@ -17,15 +17,8 @@ def _menu(opciones):
     return ReplyKeyboardMarkup(filas, resize_keyboard=True, is_persistent=True)
 
 
-async def atender_boton(update, context, boton):
-    """Responde a un boton ya reconocido por teclado.preparar()."""
-    ayuda = texto_de_ayuda(boton)
-    if ayuda:                                   # Asistencia y Factura solo instruyen
-        await update.message.reply_text(ayuda, parse_mode="Markdown",
-                                        reply_markup=teclado_capataz())
-        return
-    if boton != BOTON_HOROMETRO:
-        return
+async def abrir_horometro(update, context):
+    """Arranca el flujo guiado. El despacho de botones vive en botones.py."""
     from modules.opciones_capataz import maquinas_para_botones
     from modules.parte_contexto import construir
     ctx = await asyncio.to_thread(construir)

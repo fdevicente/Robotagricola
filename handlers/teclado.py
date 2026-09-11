@@ -1,10 +1,17 @@
 # -*- coding: utf-8 -*-
-"""Los tres botones fijos que Juan tiene siempre sobre el teclado.
+"""Los botones fijos que Juan tiene siempre sobre el teclado.
 
-POR QUE
-Se midio que manda: 15 intentos de comando --muchos rotos, "/ cancelar",
-"/ bitacora", "/ Asistencia", "/" a secas--, 8 fotos de factura, 8 partes de
-horometro y 7 de asistencia. Busca un menu y no lo encuentra.
+POR QUE, Y POR QUE ESTOS
+Salen de lo que INTENTA, no de lo que suponemos. Medido el 11-sep-2026 sobre
+sus 85 mensajes: 24 intentos de comando --/bitacora 7, /maquinaria 3, /uso 3,
+/ayuda 2, /cancelar 2, "/" a secas 2, y uno cada uno de /deposito, /tareas,
+/asistencia, /start e /inventario--, 15 fotos y 46 mensajes de texto libre.
+Busca un menu y no lo encuentra.
+
+Los tres primeros botones (asistencia, horometro, factura) cubrian lo mas
+frecuente. Faltaban JUSTO los dos que se rompieron: /uso --que el 10-sep dejo
+el inventario con un producto fantasma en -5-- y un cancelar explicito, que el
+escribia "/ cancelar" con espacio y Telegram no marca como comando.
 
 Se usa ReplyKeyboardMarkup y no botones inline a proposito: el teclado queda
 fijo sobre el de Telegram, siempre visible, sin gastar un mensaje ni obligar a
@@ -19,8 +26,13 @@ from telegram import KeyboardButton, ReplyKeyboardMarkup
 BOTON_ASISTENCIA = "📋 Asistencia"
 BOTON_HOROMETRO = "🚜 Horómetro"
 BOTON_FACTURA = "🧾 Factura"
+BOTON_INSUMO = "🧪 Insumo"
+BOTON_MAQUINARIA = "🔧 Maquinaria"
+BOTON_CANCELAR = "❌ Cancelar"
+BOTON_AYUDA = "❓ Ayuda"
 
-BOTONES = (BOTON_ASISTENCIA, BOTON_HOROMETRO, BOTON_FACTURA)
+BOTONES = (BOTON_ASISTENCIA, BOTON_HOROMETRO, BOTON_FACTURA,
+           BOTON_INSUMO, BOTON_MAQUINARIA, BOTON_CANCELAR, BOTON_AYUDA)
 
 _AYUDA = {
     BOTON_ASISTENCIA: (
@@ -37,10 +49,15 @@ _AYUDA = {
 
 
 def teclado_capataz() -> ReplyKeyboardMarkup:
-    """El teclado fijo. Queda puesto hasta que alguien lo reemplace."""
+    """El teclado fijo. Queda puesto hasta que alguien lo reemplace.
+
+    Dos por fila como maximo: en un telefono, tres quedan ilegibles.
+    """
     return ReplyKeyboardMarkup(
         [[KeyboardButton(BOTON_ASISTENCIA)],
-         [KeyboardButton(BOTON_HOROMETRO), KeyboardButton(BOTON_FACTURA)]],
+         [KeyboardButton(BOTON_HOROMETRO), KeyboardButton(BOTON_FACTURA)],
+         [KeyboardButton(BOTON_INSUMO), KeyboardButton(BOTON_MAQUINARIA)],
+         [KeyboardButton(BOTON_CANCELAR), KeyboardButton(BOTON_AYUDA)]],
         resize_keyboard=True, is_persistent=True)
 
 

@@ -51,7 +51,7 @@ async def handle_text(update, context):
     from handlers.teclado import preparar
     _boton = preparar(context.user_data, update.message.text)
     if _boton:
-        from handlers.horometro_h import atender_boton
+        from handlers.botones import atender_boton
         await atender_boton(update, context, _boton)
         return
 
