@@ -42,6 +42,17 @@ TELEGRAM_CHAT_ID  = os.getenv("TELEGRAM_CHAT_ID", "")
 _auto_env = os.getenv("AUTO_SAVE_USERS", "8840816610")
 AUTO_SAVE_USERS = {int(x) for x in _auto_env.replace(";", ",").split(",") if x.strip().isdigit()}
 
+# QUIEN PUEDE USAR EL BOT. Un bot de Telegram es PUBLICO: cualquiera que sepa su
+# nombre le puede escribir. El 12-sep-2026 un desconocido llamado "prince" mando
+# /start y recibio el menu completo, con los comandos que leen la plata y los que
+# ESCRIBEN en el Master. No habia ningun control: AUTO_SAVE_USERS decide si
+# mostrar el teclado del capataz, no si la persona tiene permiso.
+# Default: el dueño (8684368429) y Juan Parada (8840816610), los DOS unicos chats
+# que aparecen en todo el respaldo. Editable por env TELEGRAM_USUARIOS="id1,id2".
+_users_env = os.getenv("TELEGRAM_USUARIOS", "8684368429,8840816610")
+USUARIOS_AUTORIZADOS = {int(x) for x in _users_env.replace(";", ",").split(",")
+                        if x.strip().isdigit()}
+
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 os.makedirs(BOLETAS_DIR, exist_ok=True)
 

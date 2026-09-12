@@ -35,6 +35,17 @@ _LOG_FMT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 logging.basicConfig(format=_LOG_FMT, level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# httpx logea cada getUpdates en INFO, y la URL LLEVA EL TOKEN DEL BOT. Medido
+# el 12-sep-2026: 557.257 lineas con el token en un bot.log de 95 MB. Dos
+# problemas en uno:
+#   - el token queda en texto plano en disco, y basta mandarle el log a alguien
+#     para regalarselo;
+#   - esas lineas son el 99% del archivo y tapan todo lo demas. Diagnosticar el
+#     horometro trabado del 9-sep costo justamente por eso.
+# A WARNING se siguen viendo los errores de red, que es lo unico que importa.
+for _ruidoso in ("httpx", "httpcore"):
+    logging.getLogger(_ruidoso).setLevel(logging.WARNING)
+
 # FileHandler además del stdout para que warnings/errors persistan
 # (ej: fallas al renombrar archivos por handles abiertos en Windows).
 try:
@@ -331,13 +342,23 @@ def main():
     from handlers.errores import manejar_error
     app.add_error_handler(manejar_error)
 
-    # Tracker de actividad: corre PRIMERO para cada update (group=-1) y registra
-    # el último mensaje procesado (heartbeat persistente).
-    app.add_handler(TypeHandler(Update, _track_activity), group=-1)
-    # Mirror: reenvía al dueño todo lo que mandan los demás.
-    # OJO: en PTB solo corre UN handler por grupo → debe ir en un grupo propio
-    # (en group=-1 junto al tracker jamás se ejecutaría).
-    app.add_handler(TypeHandler(Update, mirror_update), group=-2)
+    # ── El orden de estos tres grupos importa ──
+    # OJO: en PTB solo corre UN handler por grupo, así que cada uno va en el
+    # suyo. Y van de más negativo a menos: espejo → tracker → guardia.
+    #
+    # Mirror: reenvía al dueño todo lo que mandan los demás. Va PRIMERO para que
+    # el intento de un desconocido quede guardado en el respaldo crudo aunque el
+    # guardia lo rechace: sin eso, el incidente del 12-sep no se habría podido
+    # reconstruir.
+    app.add_handler(TypeHandler(Update, mirror_update), group=-3)
+    # Tracker de actividad: registra el último mensaje procesado (heartbeat
+    # persistente).
+    app.add_handler(TypeHandler(Update, _track_activity), group=-2)
+    # 🔒 GUARDIA DE ACCESO: corta todo si quien escribe no está autorizado.
+    # Va acá y no como filtro en cada handler porque hay 31 comandos: uno nuevo
+    # se agrega sin acordarse del filtro y el agujero vuelve.
+    from handlers.acceso import guardia
+    app.add_handler(TypeHandler(Update, guardia), group=-1)
 
     # Comandos
     app.add_handler(CommandHandler("start",    cmd_start))
