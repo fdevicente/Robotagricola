@@ -188,3 +188,23 @@ def test_httpx_no_logea_en_INFO():
     for ruidoso in ("httpx", "httpcore"):
         assert logging.getLogger(ruidoso).level >= logging.WARNING, (
             "%s en INFO escribe el token del bot en bot.log" % ruidoso)
+
+
+def test_los_tests_no_escriben_en_el_bot_log_de_produccion():
+    """⚠️ Importar main engancha un FileHandler al bot.log REAL.
+
+    Medido el 12-sep-2026: correr la suite dejó 18 líneas "Acceso denegado:
+    X (user_id 6934038077)" en el log de producción — mis propios fakes. Leídas
+    después parecen intentos de intrusión de verdad. Es la misma clase de señal
+    falsa que el "bot apagado 62h" de agosto: un log que miente cuesta más que
+    un log que falta.
+    """
+    import logging
+    import os
+
+    import main            # noqa: F401
+    archivos = [h for h in logging.getLogger().handlers
+                if isinstance(h, logging.FileHandler)
+                and os.path.basename(getattr(h, "baseFilename", "")) == "bot.log"]
+    assert archivos == [], (
+        "la suite está escribiendo en bot.log: %s" % archivos)

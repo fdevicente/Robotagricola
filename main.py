@@ -49,11 +49,21 @@ for _ruidoso in ("httpx", "httpcore"):
 # FileHandler además del stdout para que warnings/errors persistan
 # (ej: fallas al renombrar archivos por handles abiertos en Windows).
 try:
+    # ⚠️ NO bajo pytest. Importar este modulo engancha el FileHandler al bot.log
+    # REAL, asi que la suite escribia en el log de produccion: el 12-sep-2026
+    # dejo 18 lineas "Acceso denegado: X (user_id 6934038077)" --fakes de los
+    # tests-- que leidas despues parecen intentos de intrusion de verdad. Es la
+    # misma clase de señal falsa que el "bot apagado 62h" de agosto: un log que
+    # miente cuesta mas que un log que falta.
+    if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
+        raise RuntimeError("bajo pytest no se escribe en bot.log")
     _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bot.log")
     _fh = logging.FileHandler(_LOG_FILE, encoding="utf-8")
     _fh.setLevel(logging.INFO)
     _fh.setFormatter(logging.Formatter(_LOG_FMT))
     logging.getLogger().addHandler(_fh)
+except RuntimeError:
+    pass
 except Exception as _e:
     logger.warning(f"No se pudo crear FileHandler de log: {_e}")
 
