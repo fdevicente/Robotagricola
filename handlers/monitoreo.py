@@ -273,3 +273,26 @@ async def job_heartbeat(context):
         await _send_md(context.bot, owner, "❤️ " + txt)
     except Exception as e:
         logger.warning(f"job_heartbeat: {e}")
+
+
+async def job_respaldo_master(context):
+    """Job: respalda el Master si cambió (al arrancar y cada 6 h). Si falla, avisa.
+
+    La tarea de Windows que respaldaba (DailyBanco-18h) falló todos los días
+    durante semanas buscando py.exe, y nadie se enteró: por eso el aviso.
+    """
+    from infrastructure import backups
+    try:
+        snap = await asyncio.to_thread(backups.respaldar_si_cambio, "automático")
+    except Exception as e:
+        logger.error(f"Respaldo automático del Master falló: {e}")
+        owner = context.bot_data.get("owner_chat_id")
+        if owner:
+            try:
+                await context.bot.send_message(
+                    owner, f"⚠️ No pude respaldar el Master: {str(e)[:150]}")
+            except Exception:
+                pass
+        return
+    if snap:
+        logger.info(f"Respaldo automático del Master: {snap}")

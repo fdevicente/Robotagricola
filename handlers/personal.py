@@ -159,17 +159,30 @@ async def handle_text_trabajador(update, context) -> bool:
 
 
 async def job_vacaciones_mensuales(context: ContextTypes.DEFAULT_TYPE):
-    """Job mensual: acumula días de vacaciones a cada trabajador."""
+    """Job: deja las vacaciones al día (al arrancar y cada 12 h).
+
+    Recalcula, así que correrlo seguido no duplica nada, y el mes en que el PC
+    dormía el día 1 se recupera solo. Avisa solo si algo cambió o si falla: el
+    1-jul-2026 falló por el Master bloqueado y solo quedó en el log.
+    """
+    chat_id = (context.bot_data.get("owner_chat_id")
+               or context.bot_data.get("banco_chat_id") or TELEGRAM_CHAT_ID)
     try:
         result = await asyncio.to_thread(actualizar_dias_mensuales)
-        chat_id = (context.bot_data.get("owner_chat_id")
-                   or context.bot_data.get("banco_chat_id") or TELEGRAM_CHAT_ID)
-        if chat_id:
-            await context.bot.send_message(
-                chat_id=int(chat_id),
-                text=f"🏖️ *Vacaciones actualizadas*\n\n"
-                     f"📊 {result['actualizados']} trabajadores\n"
-                     f"📅 +{result['incremento']} días acumulados por persona",
-                parse_mode="Markdown")
     except Exception as e:
         logger.error(f"Job vacaciones falló: {e}")
+        if chat_id:
+            try:
+                await context.bot.send_message(
+                    chat_id=int(chat_id),
+                    text=f"⚠️ No pude actualizar las vacaciones: {str(e)[:150]}")
+            except Exception:
+                pass
+        return
+    if result["actualizados"] and chat_id:
+        await context.bot.send_message(
+            chat_id=int(chat_id),
+            text=f"🏖️ *Vacaciones al día* (hasta {result['hasta']})\n\n"
+                 f"📊 {result['actualizados']} trabajador(es) con el saldo actualizado\n"
+                 f"📅 +{result['incremento']} días por cada mes trabajado",
+            parse_mode="Markdown")

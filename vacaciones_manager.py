@@ -3,7 +3,8 @@ vacaciones_manager.py — Gestión de Vacaciones y Personal
 Hojas: Personal, Vacaciones
 """
 import logging
-from datetime import date, datetime
+from collections import defaultdict
+from datetime import date, datetime, timedelta
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from config import EXCEL_PATH
@@ -13,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 PERSONAL_SHEET = "Personal"
 VACACIONES_SHEET = "Vacaciones"
+BASE_SHEET = "Vacaciones Pendientes"
 
 PERSONAL_HEADERS = [
     "Nombre", "RUT", "Cargo", "Fecha Ingreso",
@@ -25,10 +27,11 @@ VACACIONES_HEADERS = [
 
 # Chile: 15 días hábiles = ~21 corridos por año
 DIAS_ANUALES = 15
+DIAS_POR_MES = DIAS_ANUALES / 12        # 1,25
 
 
-def _open_wb():
-    return load_workbook(EXCEL_PATH)
+def _open_wb(path=None):
+    return load_workbook(path or EXCEL_PATH)
 
 
 def _create_sheet(wb, name, headers, widths, color):
@@ -96,42 +99,129 @@ def agregar_trabajador(nombre: str, rut: str = "", cargo: str = "",
     return True
 
 
+def _fecha(v):
+    """date desde lo que venga en la celda: date, datetime o texto AAAA-MM-DD."""
+    if isinstance(v, datetime):
+        return v.date()
+    if isinstance(v, date):
+        return v
+    try:
+        return datetime.strptime(str(v)[:10], "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
+
+
+def dias_habiles(inicio: date, fin: date) -> int:
+    """Días hábiles entre dos fechas, ambas incluidas: lunes a viernes sin feriados.
+
+    Antes se contaba con toordinal() % 7, que salta viernes y sábado y cuenta el
+    domingo: una semana de lunes a viernes daba 4.
+    """
+    from modules.feriados import es_habil
+    return sum(1 for i in range((fin - inicio).days + 1)
+               if es_habil(inicio + timedelta(days=i)))
+
+
+def saldos_calculados(wb, hasta: date) -> dict:
+    """Saldo de vacaciones de cada trabajador de Personal, hasta el mes de `hasta`.
+
+    saldo base (hoja Vacaciones Pendientes) + 1,25 por mes desde la fecha de ese
+    saldo − días de las vacaciones aprobadas. Quien no tiene saldo base parte en
+    0 desde su fecha de ingreso. Es la misma cuenta de
+    src/dashboard_data.get_vacaciones_pendientes y de la carga del 4-ago-2026.
+    """
+    tomados, ultima = defaultdict(float), {}
+    if VACACIONES_SHEET in wb.sheetnames:
+        for row in wb[VACACIONES_SHEET].iter_rows(min_row=2, values_only=True):
+            if not row or not row[0] or "aprobad" not in str(row[4] or "").lower():
+                continue
+            clave = str(row[0]).strip().upper()
+            try:
+                tomados[clave] += float(row[3] or 0)
+            except (TypeError, ValueError):
+                continue
+            fin = _fecha(row[2])
+            if fin and (clave not in ultima or fin > ultima[clave]):
+                ultima[clave] = fin
+
+    base = {}
+    if BASE_SHEET in wb.sheetnames:
+        for row in wb[BASE_SHEET].iter_rows(min_row=2, values_only=True):
+            desde = _fecha(row[4]) if row and row[0] else None
+            if not desde:
+                continue
+            try:
+                base[str(row[0]).strip().upper()] = (float(row[3] or 0), desde)
+            except (TypeError, ValueError):
+                continue
+
+    saldos = {}
+    for row in _ensure_personal(wb).iter_rows(min_row=2, values_only=True):
+        if not row or not row[0]:
+            continue
+        nombre = str(row[0]).strip()
+        clave = nombre.upper()
+        saldo, desde = base.get(clave, (0.0, _fecha(row[3])))
+        if not desde:
+            continue
+        meses = max(0, (hasta.year - desde.year) * 12 + hasta.month - desde.month)
+        saldos[nombre] = {
+            "pendientes": round(saldo + meses * DIAS_POR_MES - tomados[clave], 2),
+            "tomados": tomados[clave],
+            "ultima": ultima.get(clave),
+        }
+    return saldos
+
+
+def _escribir_saldo(ws, row_idx, saldo) -> bool:
+    """Deja en la fila de Personal el saldo calculado. True si cambió algo."""
+    cambio = False
+    for col, valor in ((5, saldo["pendientes"]), (6, saldo["tomados"])):
+        try:
+            igual = abs(float(ws.cell(row=row_idx, column=col).value or 0) - valor) < 0.005
+        except (TypeError, ValueError):
+            igual = False
+        if not igual:
+            ws.cell(row=row_idx, column=col).value = (
+                int(valor) if float(valor).is_integer() else valor)
+            cambio = True
+    if saldo["ultima"] and _fecha(ws.cell(row=row_idx, column=7).value) != saldo["ultima"]:
+        ws.cell(row=row_idx, column=7).value = saldo["ultima"]
+        cambio = True
+    return cambio
+
+
 def registrar_vacacion(nombre: str, fecha_inicio: str, fecha_fin: str,
-                       observaciones: str = "") -> dict:
-    """Registra vacaciones para un trabajador."""
-    wb = _open_wb()
+                       observaciones: str = "", path=None, hasta: date = None) -> dict:
+    """Registra vacaciones para un trabajador y le deja el saldo recalculado."""
+    wb = _open_wb(path)
     ws_per = _ensure_personal(wb)
     ws_vac = _ensure_vacaciones(wb)
 
-    # Calcular días
-    try:
-        fi = datetime.strptime(fecha_inicio[:10], "%Y-%m-%d").date()
-        ff = datetime.strptime(fecha_fin[:10], "%Y-%m-%d").date()
+    fi, ff = _fecha(fecha_inicio), _fecha(fecha_fin)
+    if fi and ff and ff >= fi:
         dias = (ff - fi).days + 1
-        # Descontar fines de semana (aprox)
-        dias_habiles = sum(1 for i in range(dias) if (fi.toordinal() + i) % 7 not in (5, 6))
-    except Exception:
-        dias = 0
-        dias_habiles = 0
+        habiles = dias_habiles(fi, ff)
+    else:
+        dias = habiles = 0
 
-    # Registrar en hoja Vacaciones
-    ws_vac.append([nombre, fecha_inicio, fecha_fin, dias_habiles, "Aprobado", observaciones])
+    ws_vac.append([nombre, fi or fecha_inicio, ff or fecha_fin, habiles,
+                   "Aprobado", observaciones])
 
-    # Actualizar hoja Personal
+    saldos = saldos_calculados(wb, hasta or date.today())
+    encontrado = False
     for row_idx in range(2, ws_per.max_row + 1):
-        cell_nombre = ws_per.cell(row=row_idx, column=1).value
-        if cell_nombre and str(cell_nombre).strip().lower() == nombre.strip().lower():
-            pendientes = float(ws_per.cell(row=row_idx, column=5).value or 0)
-            tomados = float(ws_per.cell(row=row_idx, column=6).value or 0)
-            ws_per.cell(row=row_idx, column=5).value = max(0, pendientes - dias_habiles)
-            ws_per.cell(row=row_idx, column=6).value = tomados + dias_habiles
-            ws_per.cell(row=row_idx, column=7).value = fecha_inicio
+        actual = str(ws_per.cell(row=row_idx, column=1).value or "").strip()
+        if actual.lower() == nombre.strip().lower():
+            encontrado = True
+            if actual in saldos:
+                _escribir_saldo(ws_per, row_idx, saldos[actual])
             break
 
-    _save_wb(wb)
-    logger.info(f"Vacación registrada: {nombre}, {dias_habiles} días hábiles")
+    _save_wb(wb, path)
+    logger.info(f"Vacación registrada: {nombre}, {habiles} días hábiles")
     return {"nombre": nombre, "inicio": fecha_inicio, "fin": fecha_fin,
-            "dias_habiles": dias_habiles, "dias_corridos": dias}
+            "dias_habiles": habiles, "dias_corridos": dias, "encontrado": encontrado}
 
 
 def listar_personal() -> list[dict]:
@@ -160,25 +250,30 @@ def vacaciones_pendientes() -> list[dict]:
     return [p for p in listar_personal() if p["dias_pendientes"] > 0]
 
 
-def actualizar_dias_mensuales():
-    """Acumula 1.25 días por trabajador (15/12 = 1.25 por mes).
-    Debe ejecutarse mensualmente."""
-    wb = _open_wb()
+def actualizar_dias_mensuales(hasta: date = None, path=None) -> dict:
+    """Deja el saldo de vacaciones de cada trabajador al día hasta el mes de `hasta`.
+
+    RECALCULA, no suma. Antes sumaba +1,25 cada vez que corría sin anotar el mes:
+    un mes que no corría se perdía y uno que corría dos veces se duplicaba. En
+    2026 no acumuló con éxito ni una vez. Solo guarda el Master si algo cambió.
+    """
+    hasta = hasta or date.today()
+    wb = _open_wb(path)
     ws = _ensure_personal(wb)
+    saldos = saldos_calculados(wb, hasta)
     actualizados = 0
-    incremento = round(DIAS_ANUALES / 12, 2)  # 1.25
-
     for row_idx in range(2, ws.max_row + 1):
-        nombre = ws.cell(row=row_idx, column=1).value
-        if not nombre:
-            continue
-        pendientes = float(ws.cell(row=row_idx, column=5).value or 0)
-        ws.cell(row=row_idx, column=5).value = round(pendientes + incremento, 1)
-        actualizados += 1
+        nombre = str(ws.cell(row=row_idx, column=1).value or "").strip()
+        if nombre in saldos and _escribir_saldo(ws, row_idx, saldos[nombre]):
+            actualizados += 1
 
-    _save_wb(wb)
-    logger.info(f"Vacaciones actualizadas: +{incremento} días a {actualizados} trabajadores")
-    return {"actualizados": actualizados, "incremento": incremento}
+    if actualizados:
+        _save_wb(wb, path)
+        logger.info(f"Vacaciones al día hasta {hasta:%m-%Y}: "
+                    f"{actualizados} trabajador(es) actualizados")
+    wb.close()
+    return {"actualizados": actualizados, "incremento": round(DIAS_POR_MES, 2),
+            "hasta": f"{hasta.year}-{hasta.month:02d}"}
 
 
 def ultimas_vacaciones(n: int = 10) -> list[dict]:

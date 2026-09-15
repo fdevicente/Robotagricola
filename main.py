@@ -484,9 +484,11 @@ def main():
     app.job_queue.run_daily(job_sync_banco,
                             time=dtime(hour=8, minute=0, tzinfo=tz_chile),
                             days=(5,), name="banco_viernes")
-    # Actualizar días de vacaciones el 1ro de cada mes
-    app.job_queue.run_monthly(job_vacaciones_mensuales, when=dtime(hour=7, minute=0, tzinfo=tz_chile),
-                              day=1, name="vacaciones_mensuales")
+    # Vacaciones al día: a los 3 min de arrancar y cada 12 h. Recalcula, así que
+    # correrlo seguido no duplica. Con run_monthly (día 1, 07:00) el mes se perdía
+    # si el PC dormía a esa hora: pasó el 1-ago y el 1-sep-2026.
+    app.job_queue.run_repeating(job_vacaciones_mensuales, interval=12 * 3600, first=180,
+                                name="vacaciones_mensuales")
     # Resumen semanal cash flow: LUNES 08:00.
     # ⚠️ days=(1,) es lunes. Estuvo en days=(0,) — DOMINGO — desde el salto a
     # PTB 20+, que invirtió el mapeo. Corregido 2026-08-24.
@@ -525,9 +527,15 @@ def main():
     app.job_queue.run_daily(job_sync_db,
                             time=dtime(hour=21, minute=0, tzinfo=tz_chile),
                             name="sync_db")
-    logger.info("⏰ Jobs programados: banco VIERNES 08:00, vacaciones día 1, "
+    # Respaldo automático del Master: a los 2 min de arrancar y cada 6 h, solo si
+    # cambió, y avisa si falla. La tarea de Windows que lo hacía (DailyBanco-18h)
+    # falló a diario durante semanas: busca py.exe, que no existe.
+    from handlers.monitoreo import job_respaldo_master
+    app.job_queue.run_repeating(job_respaldo_master, interval=6 * 3600, first=120,
+                                name="respaldo_master")
+    logger.info("⏰ Jobs programados: banco VIERNES 08:00, vacaciones al arrancar y cada 12 h, "
                 "resumen LUNES 08:00, reporte mensual día 1, heartbeat 20:00, "
-                "bodega LUNES 08:30")
+                "bodega LUNES 08:30, respaldo del Master cada 6 h")
 
     logger.info("✅ Bot iniciado. Esperando mensajes...")
     # drop_pending_updates=False → procesa los mensajes que llegaron mientras

@@ -1,8 +1,18 @@
 """Backup automatico de Master.xlsx y codigo del Robot a Dropbox."""
-import os, shutil, logging
-from datetime import datetime
+import hashlib
+import logging
+import os
+import re
+import shutil
+import time
+from datetime import date, datetime
 
 logger = logging.getLogger(__name__)
+
+# Nombre de los respaldos automáticos: 2026-09-15_09-24.xlsx. Solo a estos se les
+# aplica la retención; los manuales (MASTER_pre_*, de los scripts de carga) no se
+# borran nunca solos.
+_AUTOMATICO = re.compile(r"^(\d{4}-\d{2}-\d{2})_\d{2}-\d{2}\.xlsx$")
 
 
 def backup_master(reason: str, excel_path=None, backup_base=None,
@@ -15,6 +25,10 @@ def backup_master(reason: str, excel_path=None, backup_base=None,
     apuntando a carpetas temporales de pytest ya borradas. Es el mismo patrón
     que una vez destruyó el Master real: confiar en un default dentro de algo
     que el test creía haber aislado.
+
+    Devuelve la ruta del snapshot. Si el Master cambia mientras se copia y no se
+    logra una copia fiel, levanta RuntimeError en vez de dejar un respaldo a
+    medias.
     """
     if excel_path is None or backup_base is None:
         from config import EXCEL_PATH, DROPBOX_BACKUP_PATH
@@ -25,11 +39,10 @@ def backup_master(reason: str, excel_path=None, backup_base=None,
     snap_dir = os.path.join(master_dir, "snapshots")
     os.makedirs(snap_dir, exist_ok=True)
 
-    shutil.copy2(excel_path, os.path.join(master_dir, "current.xlsx"))
-
     ts = datetime.now().strftime("%Y-%m-%d_%H-%M")
     snap_path = os.path.join(snap_dir, f"{ts}.xlsx")
-    shutil.copy2(excel_path, snap_path)
+    _copiar_verificado(excel_path, snap_path)
+    _copiar_verificado(snap_path, os.path.join(master_dir, "current.xlsx"))
 
     try:
         from config import DRIVE_COLA_PATH, DRIVE_MAX_INTENTOS
@@ -39,9 +52,62 @@ def backup_master(reason: str, excel_path=None, backup_base=None,
     except Exception as e:
         logger.warning("No pude encolar el respaldo para Drive: %s", e)
 
-    _rotate_snapshots(snap_dir, keep=30)
+    _aplicar_retencion(snap_dir)
 
     logger.info(f"Backup Master ({reason}): {ts}")
+    return snap_path
+
+
+def respaldar_si_cambio(reason: str, excel_path=None, backup_base=None,
+                        cola_path=None):
+    """Respalda el Master solo si cambió desde el último respaldo automático.
+
+    Es lo que corre el job del bot (al arrancar y cada 6 h): sin cambios no se
+    llenan Dropbox ni Drive de copias idénticas. Devuelve la ruta del snapshot,
+    o None si no hacía falta.
+    """
+    if excel_path is None or backup_base is None:
+        from config import EXCEL_PATH, DROPBOX_BACKUP_PATH
+        excel_path = excel_path or EXCEL_PATH
+        backup_base = backup_base or DROPBOX_BACKUP_PATH
+
+    snap_dir = os.path.join(backup_base, "Master", "snapshots")
+    if os.path.isdir(snap_dir):
+        automaticos = sorted(n for n in os.listdir(snap_dir) if _AUTOMATICO.match(n))
+        if automaticos and (_huella(os.path.join(snap_dir, automaticos[-1]))
+                            == _huella(excel_path)):
+            return None
+    return backup_master(reason, excel_path=excel_path, backup_base=backup_base,
+                         cola_path=cola_path)
+
+
+def _huella(ruta):
+    h = hashlib.sha256()
+    with open(ruta, "rb") as f:
+        for bloque in iter(lambda: f.read(1 << 20), b""):
+            h.update(bloque)
+    return h.hexdigest()
+
+
+def _copiar_verificado(origen, destino, intentos=3, espera=2):
+    """Copia `origen` a `destino` solo si la copia es fiel.
+
+    Se copia a un temporal y se compara su huella con la del origen antes y
+    después: si el Master se guardó mientras se copiaba, la copia puede quedar a
+    medias. Solo cuando calzan las tres se reemplaza el destino.
+    """
+    parcial = destino + ".parcial"
+    for intento in range(1, intentos + 1):
+        antes = _huella(origen)
+        shutil.copy2(origen, parcial)
+        if _huella(parcial) == antes == _huella(origen):
+            os.replace(parcial, destino)
+            return
+        os.remove(parcial)
+        if intento < intentos:
+            time.sleep(espera)
+    raise RuntimeError(f"{origen} cambió mientras se copiaba ({intentos} intentos): "
+                       "no dejé un respaldo a medias")
 
 
 def backup_codebase(robot_dir=None, backup_base=None):
@@ -63,11 +129,28 @@ def backup_codebase(robot_dir=None, backup_base=None):
     logger.info("Backup codebase completado")
 
 
-def _rotate_snapshots(snap_dir, keep=30):
-    """Mantiene solo los ultimos N snapshots."""
-    files = sorted(os.listdir(snap_dir))
-    while len(files) > keep:
-        os.remove(os.path.join(snap_dir, files.pop(0)))
+def _aplicar_retencion(snap_dir, hoy=None):
+    """Borra los respaldos AUTOMÁTICOS que sobran según `cuales_borrar`.
+
+    Reemplaza a la rotación que dejaba "los últimos 30" por orden ALFABÉTICO:
+    los 'MASTER_pre_*' ordenan después de '2026-…', se quedaban con los cupos y
+    lo que se borraba eran los respaldos nuevos (de 47 quedaban 8). Lo que no
+    tiene nombre de respaldo automático no se toca.
+    """
+    snaps = []
+    for nombre in sorted(os.listdir(snap_dir)):     # por nombre: en empate de día gana el último
+        m = _AUTOMATICO.match(nombre)
+        if not m:
+            continue
+        try:
+            snaps.append({"nombre": nombre, "fecha": date.fromisoformat(m.group(1))})
+        except ValueError:
+            continue
+    for s in cuales_borrar(snaps, hoy=hoy):
+        try:
+            os.remove(os.path.join(snap_dir, s["nombre"]))
+        except OSError as e:
+            logger.warning("No pude borrar el respaldo viejo %s: %s", s["nombre"], e)
 
 
 def cuales_borrar(snapshots: list[dict], hoy=None) -> list[dict]:
