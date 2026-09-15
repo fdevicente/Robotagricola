@@ -686,6 +686,10 @@ async def _process_and_reply(update, context, status_msg, file_path, ud=None, pr
     ud["pending_file_path"] = file_path
     ud["editing_field"] = None
 
+    # Lo que el extractor cambió por su cuenta (un total "aprendido") se tiene
+    # que ver: en el preview, o en un mensaje aparte si no hay preview.
+    avisos = result.get("avisos") or []
+
     # ── MODO CAPATAZ: guardar directo sin preview/confirmación (la cola no se atora) ──
     if ud.get("auto_mode"):
         first = items[0]
@@ -696,10 +700,18 @@ async def _process_and_reply(update, context, status_msg, file_path, ud=None, pr
                 await asyncio.to_thread(_agregar_proveedor, nombre, rut)
         except Exception as e:
             logger.warning(f"Auto-factura: no pude verificar/agregar proveedor: {e}")
+        for aviso in avisos:
+            try:
+                await context.bot.send_message(chat_id=status_msg.chat_id, text=aviso,
+                                               parse_mode="Markdown")
+            except Exception as e:
+                logger.warning(f"Auto-factura: no pude mandar el aviso: {e}")
         await _guardar_excel(_MsgAsQuery(status_msg), context, items, file_path)
         return
 
     preview = prefijo + _build_preview(items)
+    if avisos:
+        preview = "\n\n".join(avisos) + "\n\n" + preview
     if result.get("duplicado"):
         preview = ("⚠️ *ADVERTENCIA: Esta factura parece ya estar registrada.*\n"
                     "Revisa bien antes de guardar.\n\n" + preview)

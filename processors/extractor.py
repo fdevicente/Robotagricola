@@ -848,10 +848,16 @@ def _factura_duplicada(items: list) -> bool:
 # ─────────────────────────────────────────────
 # APRENDIZAJE DESDE CORRECCIONES DEL USUARIO
 # ─────────────────────────────────────────────
-def _aplicar_correcciones_aprendidas(items: list) -> list:
+def _aplicar_correcciones_aprendidas(items: list, avisos: list = None) -> list:
     """Lee correcciones_log.json y aplica patrones aprendidos de correcciones previas.
     - Nombres de proveedor: si el usuario corrigió el nombre para este RUT, lo aplica.
-    - Totales: si hay un factor de corrección consistente (>=2 veces) para este RUT, lo aplica.
+    - Totales: si el total de este RUT se corrigió con un factor consistente en al
+      menos DOS facturas distintas, lo aplica y lo deja escrito en `avisos`.
+
+    Dos correcciones no son dos facturas: el 23-abr-2026 la Nº93885 de Adrian
+    Barrios llegó dos veces y se corrigió en cada pasada, y con eso bastaba
+    para que la próxima de ese proveedor quedara con un 16 % menos sin que nadie
+    lo viera. Ver tests/test_aprendizaje_totales.py.
     """
     try:
         from config import DOWNLOAD_DIR
@@ -865,6 +871,7 @@ def _aplicar_correcciones_aprendidas(items: list) -> list:
 
         from collections import defaultdict
         factores_total   = defaultdict(list)   # rut → [factores de corrección de totales]
+        facturas_total   = defaultdict(list)   # rut → [facturas de donde salieron esos factores]
         nombres_corr     = {}                  # rut → último nombre correcto
         glosas_corr      = defaultdict(list)   # rut → [(glosa_claude, glosa_usuario)]
 
@@ -879,6 +886,9 @@ def _aplicar_correcciones_aprendidas(items: list) -> list:
                 factor = entrada.get("factor")
                 if factor and abs(factor - 1.0) > 0.02:   # ignorar correcciones menores al 2%
                     factores_total[rut].append(factor)
+                    nro = str(entrada.get("nro_factura") or "").strip()
+                    if nro and nro not in facturas_total[rut]:
+                        facturas_total[rut].append(nro)
             elif campo == "Detalle / Glosa":
                 factores_total  # no usamos glosa aún
 
@@ -892,21 +902,36 @@ def _aplicar_correcciones_aprendidas(items: list) -> list:
                     logger.info(f"Aprendizaje: proveedor {item.get('Nombre Factura / Proveedor')!r} → {nombre_aprendido!r}")
                     item["Nombre Factura / Proveedor"] = nombre_aprendido
 
-            # Aplicar factor de corrección de total si es consistente
+            # Aplicar factor de corrección de total si es consistente.
+            # Hacen falta dos FACTURAS, no dos correcciones. La dispersión, en
+            # cambio, se mide sobre todas: una factura corregida con valores
+            # distintos dice que el error no es parejo.
             if rut in factores_total:
                 factores = factores_total[rut]
-                if len(factores) >= 2:
+                facturas = facturas_total[rut]
+                if len(facturas) >= 2:
                     factor_med = sum(factores) / len(factores)
                     varianza   = max(abs(f - factor_med) / factor_med for f in factores)
                     if varianza < 0.05:   # factor consistente (< 5% de dispersión)
                         total_actual = float(item.get("Total Factura") or 0)
                         if total_actual > 0:
                             total_corr = round(total_actual * factor_med)
-                            logger.info(
+                            logger.warning(
                                 f"Aprendizaje: factor {factor_med:.3f} aplicado al total de {rut}: "
-                                f"${total_actual:,.0f} → ${total_corr:,.0f}"
+                                f"${total_actual:,.0f} → ${total_corr:,.0f} "
+                                f"(facturas {', '.join(facturas)})"
                             )
                             item["Total Factura"] = total_corr
+                            nros = [f"Nº{n}" for n in facturas]
+                            cambio = "menos" if factor_med < 1 else "más"
+                            aviso = ("⚠️ *Ajusté el total con lo aprendido de este proveedor*\n"
+                                     f"Leí ${total_actual:,.0f} y quedó en ${total_corr:,.0f} "
+                                     f"(un {abs(1 - factor_med) * 100:.0f} % {cambio}), porque así "
+                                     f"se corrigieron antes sus facturas "
+                                     f"{', '.join(nros[:-1])} y {nros[-1]}.\n"
+                                     "Revisa que ese sea el total de la factura.")
+                            if avisos is not None and aviso not in avisos:
+                                avisos.append(aviso)
 
     except Exception as e:
         logger.warning(f"Error aplicando correcciones aprendidas: {e}")
@@ -1242,7 +1267,8 @@ def process_file(file_path: str) -> dict:
     if not all_items:
         return {"status": "error", "message": "La IA no pudo extraer datos de la factura."}
 
-    all_items = _aplicar_correcciones_aprendidas(all_items)
+    avisos = []
+    all_items = _aplicar_correcciones_aprendidas(all_items, avisos)
     all_items = _limpiar_items(all_items)
 
     # Verificar duplicado
@@ -1251,7 +1277,8 @@ def process_file(file_path: str) -> dict:
     # Registrar en log
     _registrar_factura(all_items, file_path)
 
-    return {"status": "ok", "items": all_items, "duplicado": duplicado}
+    return {"status": "ok", "items": all_items, "duplicado": duplicado,
+            "avisos": avisos}
 
 
 # Un peso arriba o abajo es redondeo del emisor, no un impuesto.
