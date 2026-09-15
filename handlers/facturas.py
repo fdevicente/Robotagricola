@@ -237,7 +237,10 @@ def _ajustar_al_total(items, total: float, iva_factor: float = None) -> None:
 def _registrar_correccion(item: dict, campo: str, valor_original, valor_nuevo):
     """Guarda la corrección del usuario para aprendizaje futuro."""
     try:
-        log_path = os.path.join(DOWNLOAD_DIR, "correcciones_log.json")
+        # config al momento, no el DOWNLOAD_DIR congelado al importar: con ese,
+        # los tests escribían en el correcciones_log.json real.
+        import config
+        log_path = os.path.join(config.DOWNLOAD_DIR, "correcciones_log.json")
         log = []
         if os.path.exists(log_path):
             with open(log_path, "r", encoding="utf-8") as f:
