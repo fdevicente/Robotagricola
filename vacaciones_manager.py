@@ -9,6 +9,7 @@ from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from config import EXCEL_PATH
 from excel_manager import _save_wb  # guardado con reintentos si Excel está abierto
+from infrastructure.escritura_master import escribe_master
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,7 @@ def _ensure_vacaciones(wb):
                          [28, 12, 12, 8, 12, 35], "6A1B9A")
 
 
+@escribe_master
 def crear_hojas_vacaciones():
     """Crea las hojas Personal y Vacaciones."""
     wb = _open_wb()
@@ -70,6 +72,7 @@ def crear_hojas_vacaciones():
     _save_wb(wb)
 
 
+@escribe_master
 def agregar_trabajador(nombre: str, rut: str = "", cargo: str = "",
                        fecha_ingreso: str = "") -> bool:
     """Agrega un trabajador a la hoja Personal."""
@@ -191,6 +194,7 @@ def _escribir_saldo(ws, row_idx, saldo) -> bool:
     return cambio
 
 
+@escribe_master
 def registrar_vacacion(nombre: str, fecha_inicio: str, fecha_fin: str,
                        observaciones: str = "", path=None, hasta: date = None) -> dict:
     """Registra vacaciones para un trabajador y le deja el saldo recalculado."""
@@ -250,6 +254,7 @@ def vacaciones_pendientes() -> list[dict]:
     return [p for p in listar_personal() if p["dias_pendientes"] > 0]
 
 
+@escribe_master
 def actualizar_dias_mensuales(hasta: date = None, path=None) -> dict:
     """Deja el saldo de vacaciones de cada trabajador al día hasta el mes de `hasta`.
 

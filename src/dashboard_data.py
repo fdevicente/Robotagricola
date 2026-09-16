@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta
 from collections import Counter, defaultdict
 from openpyxl import load_workbook
 from config import EXCEL_PATH
+from infrastructure.escritura_master import escribe_master
 
 logger = logging.getLogger(__name__)
 
@@ -261,14 +262,16 @@ BANCO_CATEGORIAS_VALIDAS = [
 ]
 
 
+@escribe_master
 def update_banco_categoria(fila: int, categoria: str, cultivo: str = "GENERAL"):
     """Actualiza Categoria/Cultivo de una fila de Cuenta Banco."""
     from openpyxl import load_workbook as _lw
+    from excel_manager import _save_wb
     wb = _lw(EXCEL_PATH)
     ws = wb["Cuenta Banco"]
     ws.cell(fila, 8).value = categoria
     ws.cell(fila, 9).value = cultivo
-    wb.save(EXCEL_PATH)
+    _save_wb(wb, EXCEL_PATH)
     wb.close()
     return {"ok": True, "fila": fila, "categoria": categoria}
 

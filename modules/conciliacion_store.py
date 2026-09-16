@@ -15,6 +15,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 
 from config import EXCEL_PATH
 from excel_manager import _save_wb
+from infrastructure.escritura_master import escribe_master
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ def _open():
     return load_workbook(EXCEL_PATH)
 
 
+@escribe_master
 def crear_hoja(wb=None) -> None:
     """Crea la hoja Conciliaciones si no existe. Idempotente."""
     propio = wb is None
@@ -118,6 +120,7 @@ def _actualizar_col_j(ws_banco, ws_conc, fila_banco: int) -> None:
         " + ".join(vinculos) if vinculos else None)
 
 
+@escribe_master
 def registrar_vinculos(vinculos: list[dict], usuario: str = "") -> dict:
     """Registra una lista de vínculos en UN solo guardado.
 
@@ -180,6 +183,7 @@ def registrar_vinculos(vinculos: list[dict], usuario: str = "") -> dict:
     return {"registrados": len(ids), "ids": ids}
 
 
+@escribe_master
 def desconciliar(id_vinculo: int) -> bool:
     """Elimina un vínculo por ID y actualiza el resumen del movimiento."""
     wb = _open()

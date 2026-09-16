@@ -23,6 +23,7 @@ from openpyxl import load_workbook
 
 from config import EXCEL_PATH
 from excel_manager import _save_wb
+from infrastructure.escritura_master import escribe_master
 
 logger = logging.getLogger(__name__)
 
@@ -253,6 +254,7 @@ def analizar_cartola(path: str, hoja: str = None, decimales: int = 0) -> dict:
     }
 
 
+@escribe_master
 def importar_cartola(path: str, hoja: str = None, decimales: int = 0) -> dict:
     """Agrega al Master los movimientos nuevos. Devuelve resumen."""
     res = analizar_cartola(path, hoja, decimales)

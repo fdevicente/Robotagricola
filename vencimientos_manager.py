@@ -11,6 +11,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 
 from config import EXCEL_PATH
 from excel_manager import _save_wb  # guardado con reintentos si Excel está abierto
+from infrastructure.escritura_master import escribe_master
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,7 @@ def _estilo_header(ws):
         ws.column_dimensions[chr(64 + i)].width = w
 
 
+@escribe_master
 def crear_hoja_vencimientos():
     wb = _open_wb()
     if VENC_SHEET not in wb.sheetnames:
@@ -112,6 +114,7 @@ def es_proveedor_insumo(proveedor: str) -> bool:
     return any(k in p for k in PROVEEDORES_INSUMOS)
 
 
+@escribe_master
 def agregar_pendiente(producto: str, proveedor: str, nro_factura: str,
                        fecha_compra) -> bool:
     """Agrega un producto pendiente de fecha de vencimiento (sin duplicar)."""
@@ -157,6 +160,7 @@ def listar_pendientes() -> list[dict]:
     return out
 
 
+@escribe_master
 def registrar_vencimiento(fila: int, fecha_venc, no_vence: bool = False) -> bool:
     """Fija la fecha de vencimiento (o 'no vence') de un pendiente por fila."""
     crear_hoja_vencimientos()
@@ -183,6 +187,7 @@ def registrar_vencimiento(fila: int, fecha_venc, no_vence: bool = False) -> bool
     return True
 
 
+@escribe_master
 def actualizar_estados():
     """Recalcula estados/% de todos los registros con fecha (para cron/reporte)."""
     crear_hoja_vencimientos()

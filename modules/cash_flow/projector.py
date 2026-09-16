@@ -13,6 +13,7 @@ from excel_manager import (
     COSECHAS_SHEET, HECTAREAS_SHEET, AJUSTES_SHEET, FLUJO_CAJA_SHEET,
     CATEGORIAS, CULTIVOS, IVA_RATE,
 )
+from infrastructure.escritura_master import escribe_master
 
 
 def _to_year_month(v) -> tuple[int, int] | None:
@@ -345,6 +346,7 @@ def _month_label(year: int, month: int) -> str:
     return f"{_MESES_ES[month]}-{str(year)[-2:]}"
 
 
+@escribe_master
 def write_flujo_caja(saldo_data: dict, egresos: dict, ingresos: list,
                        months: list, excel_path: str | None = None):
     """Regenera la hoja Flujo Caja con la proyeccion."""

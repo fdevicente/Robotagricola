@@ -23,3 +23,4 @@ def _produccion_desviada(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(config, "DROPBOX_BACKUP_PATH", str(base / "Backups"))
     monkeypatch.setattr(config, "DRIVE_COLA_PATH", str(base / "drive_cola.jsonl"))
     monkeypatch.setattr(config, "DOWNLOAD_DIR", str(facturas))
+    monkeypatch.setattr(config, "LOCK_DIR", str(base / "locks"))

@@ -2,6 +2,7 @@
 """Escribe en la hoja Facturas el enlace del documento en Drive."""
 import logging
 import re
+from infrastructure.escritura_master import escribe_master
 
 logger = logging.getLogger(__name__)
 
@@ -9,6 +10,7 @@ COL_PROVEEDOR, COL_NUMERO, COL_DRIVE = 4, 7, 22
 URL = "https://drive.google.com/file/d/%s/view"
 
 
+@escribe_master
 def guardar_enlace(excel_path: str, numero_factura: str, file_id: str,
                    proveedor: str = None) -> bool:
     """Pone el enlace en TODAS las líneas de esa factura. No pisa lo existente.
@@ -20,6 +22,8 @@ def guardar_enlace(excel_path: str, numero_factura: str, file_id: str,
     enlace se repara con otra pasada, escribirlo en la factura equivocada no.
     """
     from openpyxl import load_workbook
+
+    from excel_manager import _save_wb
     wb = load_workbook(excel_path)
     try:
         ws = wb["Facturas"]
@@ -38,7 +42,7 @@ def guardar_enlace(excel_path: str, numero_factura: str, file_id: str,
             ws.cell(f, COL_DRIVE).value = URL % file_id
             tocadas += 1
         if tocadas:
-            wb.save(excel_path)          # ruta EXPLÍCITA siempre
+            _save_wb(wb, excel_path)     # ruta EXPLÍCITA siempre
         else:
             # Por qué no se escribió: son dos cosas muy distintas y el log
             # tiene que distinguirlas. 'Ya tenía enlace' es lo normal al

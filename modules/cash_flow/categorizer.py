@@ -18,6 +18,7 @@ from modules.cash_flow.prompt import (
     parse_categorization_response,
 )
 from modules.cash_flow.categorizer_cache import CategorizerCache
+from infrastructure.escritura_master import escribe_master
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +131,7 @@ def _categorize_invoice_in_ws(ws, row: int, cache) -> dict:
     return result
 
 
+@escribe_master
 def categorize_invoice(row: int, excel_path=None, cache_path=None) -> dict:
     """Categoriza la fila `row` de Facturas y escribe cols Q-T en el Master."""
     excel_path = excel_path or EXCEL_PATH
@@ -154,6 +156,7 @@ def _read_bank_row(ws, row: int) -> dict:
     }
 
 
+@escribe_master
 def categorize_bank_movement(row: int, excel_path=None, cache_path=None) -> dict:
     """Categoriza fila de Cuenta Banco. Abono>0 sin Cargo -> ingreso, no llama Claude."""
     excel_path = excel_path or EXCEL_PATH
@@ -231,6 +234,7 @@ def _categorize_bank_row_in_ws(ws, row: int, cache) -> dict:
     return result
 
 
+@escribe_master
 def batch_categorize_bank_movements(excel_path=None, cache_path=None,
                                       limit: int | None = None,
                                       progress_cb=None,
@@ -296,6 +300,7 @@ def batch_categorize_bank_movements(excel_path=None, cache_path=None,
     return report
 
 
+@escribe_master
 def batch_categorize_history(excel_path=None, cache_path=None,
                                limit: int | None = None,
                                progress_cb=None,

@@ -40,6 +40,13 @@ def test_la_carpeta_de_facturas_de_la_suite_es_temporal(tmp_path_factory):
         config.DOWNLOAD_DIR
 
 
+def test_el_lock_del_master_de_la_suite_es_temporal(tmp_path_factory):
+    """El lock vive junto al bot. Sin desviarlo, la suite crearía archivos en
+    producción y le disputaría el Master al bot corriendo."""
+    import config
+    assert _dentro_de(config.LOCK_DIR, tmp_path_factory.getbasetemp()), config.LOCK_DIR
+
+
 def test_la_correccion_se_guarda_donde_dice_config_al_momento(tmp_path, monkeypatch):
     """_registrar_correccion usaba DOWNLOAD_DIR congelado al importar el módulo,
     así que redirigir config no la alcanzaba y escribía en el log real."""

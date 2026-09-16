@@ -10,6 +10,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 
 from config import EXCEL_PATH
 from excel_manager import _save_wb  # guardado con reintentos si Excel está abierto
+from infrastructure.escritura_master import escribe_master
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ def _aplicar_estilo_header(ws):
         ws.column_dimensions[chr(64 + i)].width = w
 
 
+@escribe_master
 def crear_hoja_bitacora():
     """Crea o migra la hoja Bitácora al esquema ampliado.
 
@@ -174,6 +176,7 @@ def validar_odometro(maquina: str, nuevo: float, previo: float | None,
     return None
 
 
+@escribe_master
 def registrar_bitacora_estructurada(campos: dict, registrado_por: str = "",
                                      forzar: bool = False) -> dict:
     """Guarda un registro estructurado en la bitácora.

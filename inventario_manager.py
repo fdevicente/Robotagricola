@@ -10,6 +10,7 @@ from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from config import EXCEL_PATH
 from excel_manager import _save_wb  # guardado con reintentos si Excel está abierto
+from infrastructure.escritura_master import escribe_master
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,7 @@ def _ensure_aplicaciones(wb):
                          [12, 30, 10, 8, 12, 15, 18, 35], "33691E")
 
 
+@escribe_master
 def crear_hojas_inventario():
     """Crea las hojas Inventario y Aplicaciones."""
     wb = _open_wb()
@@ -127,6 +129,7 @@ def candidatos_producto(ws, producto: str) -> list:
     return buscar_producto(nombres, producto)[1]
 
 
+@escribe_master
 def agregar_stock(producto: str, cantidad: float, categoria: str = "Otro",
                   unidad: str = "L") -> dict:
     """Agrega stock a un producto existente o lo crea."""
@@ -150,6 +153,7 @@ def agregar_stock(producto: str, cantidad: float, categoria: str = "Otro",
                 "agregado": cantidad, "stock_nuevo": cantidad, "nuevo": True}
 
 
+@escribe_master
 def registrar_uso(producto: str, cantidad: float, cultivo: str,
                   sector: str = "", responsable: str = "",
                   observaciones: str = "", fecha: str = "",

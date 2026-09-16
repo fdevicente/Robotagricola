@@ -13,6 +13,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 
 from config import EXCEL_PATH
 from excel_manager import _save_wb
+from infrastructure.escritura_master import escribe_master
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ _WIDTHS = [6, 12, 10, 70, 16]
 MAX_LARGO = 500
 
 
+@escribe_master
 def crear_hoja(wb=None, excel_path: str | None = None) -> None:
     """Crea la hoja si no existe. Idempotente."""
     ruta = excel_path or EXCEL_PATH
@@ -54,6 +56,7 @@ def _next_id(ws) -> int:
     return m + 1
 
 
+@escribe_master
 def agregar(fila_banco: int, texto: str, usuario: str = "",
             excel_path: str | None = None) -> dict:
     """Guarda una nota. Devuelve {id, fecha}."""
@@ -116,6 +119,7 @@ def conteo_por_fila(excel_path: str | None = None) -> dict:
         wb.close()
 
 
+@escribe_master
 def eliminar(id_comentario: int, excel_path: str | None = None) -> bool:
     ruta = excel_path or EXCEL_PATH
     wb = load_workbook(ruta)

@@ -9,6 +9,7 @@ from config import EXCEL_PATH
 from excel_manager import (
     CUENTA_BANCO_SHEET, COL_BANCO_TIPO, _save_wb,
 )
+from infrastructure.escritura_master import escribe_master
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ PATTERNS = [
 ]
 
 
+@escribe_master
 def detect_income_patterns(excel_path: str | None = None) -> dict:
     """Clasifica Tipo en Cuenta Banco usando regex. No toca filas ya tagueadas."""
     excel_path = excel_path or EXCEL_PATH

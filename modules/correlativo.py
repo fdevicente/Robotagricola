@@ -16,6 +16,7 @@ import unicodedata
 from openpyxl import load_workbook
 
 from config import EXCEL_PATH
+from infrastructure.escritura_master import escribe_master
 
 logger = logging.getLogger(__name__)
 
@@ -186,6 +187,7 @@ def correlativo_para(proveedor, nro_documento) -> int | None:
     return correlativo_en_indice(proveedor, nro_documento, por_prov_nro, por_nro)
 
 
+@escribe_master
 def sincronizar_desde_fxp() -> dict:
     """Completa el N° de archivo en el Master para las facturas ya numeradas en FXP.
 

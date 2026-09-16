@@ -1,5 +1,6 @@
 """FSM para wizard de cosecha (cierre por cultivo)."""
 import re
+from infrastructure.escritura_master import escribe_master
 
 
 PROMPTS = {
@@ -119,6 +120,7 @@ class CosechaWizard:
             self._advance("resumen")
 
 
+@escribe_master
 def save_to_cosechas(data: dict, year: int,
                        excel_path: str | None = None) -> int:
     """Escribe filas de wizard en Master.Cosechas. Devuelve # filas agregadas."""

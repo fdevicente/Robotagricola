@@ -14,6 +14,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 
 from config import EXCEL_PATH
 from excel_manager import _save_wb
+from infrastructure.escritura_master import escribe_master
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ def clave(fila_banco, nro_doc, proveedor="") -> tuple:
     return (int(fila_banco or 0), _norm(nro_doc), _norm(proveedor))
 
 
+@escribe_master
 def crear_hoja(wb=None, excel_path: str | None = None) -> None:
     """Crea la hoja si no existe. Idempotente."""
     ruta = excel_path or EXCEL_PATH
@@ -89,6 +91,7 @@ def rechazados(excel_path: str | None = None) -> set:
         wb.close()
 
 
+@escribe_master
 def registrar(pares: list, usuario: str = "", motivo: str = "",
               excel_path: str | None = None) -> int:
     """Guarda pares descartados. Devuelve cuántos se agregaron.
@@ -139,6 +142,7 @@ def registrar(pares: list, usuario: str = "", motivo: str = "",
     return agregados
 
 
+@escribe_master
 def deshacer(id_rechazo: int, excel_path: str | None = None) -> bool:
     """Borra un rechazo para que la sugerencia vuelva a aparecer."""
     ruta = excel_path or EXCEL_PATH

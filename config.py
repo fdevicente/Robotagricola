@@ -88,6 +88,11 @@ DRIVE_MAX_INTENTOS = int(os.getenv("DRIVE_MAX_INTENTOS", "5"))
 # Avisar cuando el Drive pase de este porcentaje de uso
 DRIVE_UMBRAL_AVISO = float(os.getenv("DRIVE_UMBRAL_AVISO", "0.80"))
 
+# Lock del Master: un solo escritor a la vez entre el bot, el dashboard y los
+# scripts (ver infrastructure/escritura_master.py). Carpeta propia y no la del
+# Master, para que la suite la pueda desviar a un temporal.
+LOCK_DIR = os.getenv("LOCK_DIR", os.path.join(_ROBOT_DIR, "files", "locks"))
+
 CASH_FLOW_CONFIG = {
     'saldo_minimo_pct': 0.10,
     'umbral_alerta_cat_pct': 0.90,

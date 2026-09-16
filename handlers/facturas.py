@@ -10,6 +10,7 @@ import re
 from datetime import datetime
 
 from config import DOWNLOAD_DIR, BOLETAS_DIR, EXCEL_PATH, AUTO_SAVE_USERS
+from infrastructure.escritura_master import escribe_master
 
 logger = logging.getLogger(__name__)
 
@@ -288,13 +289,15 @@ def _rut_existe(rut):
     return False
 
 
+@escribe_master
 def _agregar_proveedor(nombre, rut):
     try:
         import openpyxl
+        from excel_manager import _save_wb
         wb = openpyxl.load_workbook(EXCEL_PATH)
         ws = wb["Proveedores"]
         ws.append([None, nombre, rut])
-        wb.save(EXCEL_PATH)
+        _save_wb(wb, EXCEL_PATH)
         logger.info(f"Proveedor agregado: {nombre} — {rut}")
         return True
     except Exception as e:

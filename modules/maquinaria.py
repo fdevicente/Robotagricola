@@ -18,6 +18,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 
 from config import EXCEL_PATH
 from excel_manager import _save_wb
+from infrastructure.escritura_master import escribe_master
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +84,7 @@ def _crear(wb, nombre, headers, anchos, color="1F4E78"):
     return True
 
 
+@escribe_master
 def crear_hojas(excel_path: str | None = None) -> None:
     """Crea las hojas Maquinaria y Mantenciones si faltan. Idempotente."""
     ruta = excel_path or EXCEL_PATH
@@ -98,6 +100,7 @@ def crear_hojas(excel_path: str | None = None) -> None:
 
 # ── Fichas ───────────────────────────────────────────────────────────────
 
+@escribe_master
 def guardar_ficha(datos: dict, excel_path: str | None = None) -> str:
     """Crea o actualiza la ficha de una máquina. Devuelve el nombre canónico.
 
@@ -179,6 +182,7 @@ def normalizar_tipo(texto: str) -> str:
     return "OTRO"
 
 
+@escribe_master
 def registrar_mantencion(m: dict, registrado_por: str = "",
                          excel_path: str | None = None) -> int:
     """Guarda una mantención. Devuelve el ID."""

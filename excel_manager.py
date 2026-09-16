@@ -5,41 +5,65 @@ Hoja: Facturas (columnas 1-15)
 Hoja: Boletas  (columnas 1-7) — caja chica
 """
 import logging
+import os
 import time
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from config import EXCEL_PATH
+from infrastructure.escritura_master import escribe_master, bloqueo
 
 logger = logging.getLogger(__name__)
 
 
 def _save_wb(wb, path=None, intentos=5, espera=4):
-    """Guarda el workbook con reintentos si el archivo está bloqueado por Excel.
+    """Guarda el workbook sin dejar nunca un archivo a medio escribir.
 
     El destino se resuelve EN CADA LLAMADA, no al importar el módulo: con el
     default fijo, cualquier código que cargara otro archivo y llamara
     `_save_wb(wb)` sin argumento terminaba escribiéndolo encima del Master real.
+
+    openpyxl no escribe encima: vacía el archivo y lo vuelve a llenar durante
+    cerca de un segundo, y un corte en ese segundo deja el Master corrupto. Por
+    eso se escribe a un temporal en la misma carpeta, se baja a disco y recién
+    ahí reemplaza al Master con os.replace, que es atómico: queda el anterior
+    entero o el nuevo entero. Todo con el lock del Master.
+
+    Si el archivo está abierto (Excel, o en Windows alguien leyéndolo en ese
+    instante), os.replace falla con PermissionError: se reintenta y, si sigue
+    ocupado, se avisa sin haberlo tocado.
     """
     path = path or EXCEL_PATH
-    for intento in range(1, intentos + 1):
+    temporal = f"{path}.{os.getpid()}.guardando"
+    with bloqueo():
         try:
-            wb.save(path)
-            return True
-        except PermissionError:
-            if intento < intentos:
-                logger.warning(
-                    f"Excel bloqueado (intento {intento}/{intentos}). "
-                    f"Cierra el archivo en Excel y espera {espera}s..."
-                )
-                time.sleep(espera)
-            else:
-                logger.error(
-                    "No se pudo guardar: el archivo sigue abierto en Excel. "
-                    "Ciérralo y vuelve a intentarlo."
-                )
-                raise
+            wb.save(temporal)
+            with open(temporal, "r+b") as f:
+                os.fsync(f.fileno())
+            for intento in range(1, intentos + 1):
+                try:
+                    os.replace(temporal, path)
+                    return True
+                except PermissionError:
+                    if intento < intentos:
+                        logger.warning(
+                            f"Excel bloqueado (intento {intento}/{intentos}). "
+                            f"Cierra el archivo en Excel y espera {espera}s..."
+                        )
+                        time.sleep(espera)
+                    else:
+                        logger.error(
+                            "No se pudo guardar: el archivo sigue abierto en Excel. "
+                            "Ciérralo y vuelve a intentarlo."
+                        )
+                        raise
+        finally:
+            if os.path.exists(temporal):
+                try:
+                    os.remove(temporal)
+                except OSError:
+                    pass
 
 SHEET_NAME = "Facturas"
 BOLETAS_SHEET = "Boletas"
@@ -96,6 +120,7 @@ def _ensure_sheet_with_headers(wb, name, headers):
         ws.append(headers)
 
 
+@escribe_master
 def ensure_cash_flow_sheets(path=None):
     """Crea hojas nuevas en Master si no existen. Idempotente."""
     from config import CASH_FLOW_CONFIG
@@ -145,6 +170,7 @@ def ensure_cash_flow_sheets(path=None):
     wb.close()
 
 
+@escribe_master
 def ensure_new_columns(path=None):
     """Agrega headers de columnas nuevas si no existen. Idempotente."""
     path = path or EXCEL_PATH
@@ -280,6 +306,7 @@ def _ensure_facturas_col16(ws):
         ws.column_dimensions["P"].width = 16
 
 
+@escribe_master
 def append_to_excel(items: list) -> bool:
     """Escribe una lista de ítems en el Excel. Devuelve True si OK."""
     try:
@@ -399,6 +426,7 @@ def buscar_factura(nro_factura: str) -> list:
     return resultados
 
 
+@escribe_master
 def registrar_pago(nro_factura: str, fecha_pago: str, medio: str = "") -> dict:
     """Actualiza Fecha Pago (col 3) en todas las filas con ese N° factura.
     medio puede ser 'Banco' o 'Caja Chica'.
@@ -570,6 +598,7 @@ def _get_saldo_caja_chica(ws) -> float:
     return saldo
 
 
+@escribe_master
 def append_boleta(items: list) -> bool:
     """Escribe boletas en hoja Boletas Y registra gasto en Caja Chica."""
     try:
@@ -615,6 +644,7 @@ def append_boleta(items: list) -> bool:
         return False
 
 
+@escribe_master
 def registrar_deposito_caja(fecha: str, monto: float, detalle: str = "Depósito caja chica") -> float:
     """Registra un depósito en Caja Chica. Devuelve el nuevo saldo."""
     try:
@@ -671,6 +701,7 @@ def consultar_saldo_caja() -> dict:
         return {"saldo": 0, "total_ingresos": 0, "total_egresos": 0, "n_gastos": 0, "ultimo_deposito": None}
 
 
+@escribe_master
 def delete_last_boletas(n: int) -> bool:
     """Elimina las últimas n filas de la hoja Boletas y la última de Caja Chica."""
     try:
@@ -693,6 +724,7 @@ def delete_last_boletas(n: int) -> bool:
         return False
 
 
+@escribe_master
 def delete_last_rows(n: int) -> bool:
     """Elimina las últimas n filas de la hoja Facturas."""
     try:
@@ -717,6 +749,7 @@ def _ensure_banco_sheet(wb):
     return _create_sheet_with_headers(wb, BANCO_SHEET, BANCO_HEADERS, widths, color="1565C0")
 
 
+@escribe_master
 def crear_hoja_banco():
     """Crea la hoja Cuenta Banco si no existe."""
     try:
@@ -729,6 +762,7 @@ def crear_hoja_banco():
         return False
 
 
+@escribe_master
 def guardar_movimientos_banco(movimientos: list[dict]) -> dict:
     """
     Guarda movimientos bancarios en la hoja Cuenta Banco.
@@ -1119,6 +1153,7 @@ def read_bank_movements_unlinked(excel_path=None) -> list[dict]:
     return movs
 
 
+@escribe_master
 def apply_bank_factura_link(bank_row: int, factura_row: int,
                               nro_factura: str, fecha_pago: str,
                               excel_path=None) -> dict:

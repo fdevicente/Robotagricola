@@ -1,5 +1,6 @@
 """Match facturas pendientes con cargos bancarios."""
 from datetime import date, datetime
+from infrastructure.escritura_master import escribe_master
 
 
 def _to_date(v):
@@ -105,6 +106,7 @@ def classify_match(candidates: list[dict]) -> dict:
     return {"status": "auto", "fila": top["fila"], "score": top["score"]}
 
 
+@escribe_master
 def match_new_bank_movements(excel_path=None, limit: int | None = None) -> dict:
     """Lee movimientos unlinked, busca matches, aplica auto-matches.
 

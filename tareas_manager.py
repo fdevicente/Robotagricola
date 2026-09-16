@@ -8,6 +8,7 @@ from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from config import EXCEL_PATH
 from excel_manager import _save_wb  # guardado con reintentos si Excel está abierto
+from infrastructure.escritura_master import escribe_master
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,7 @@ def _ensure_bitacora(wb):
                          [12, 8, 60, 18], "5D4037")
 
 
+@escribe_master
 def crear_hojas_tareas():
     """Crea las hojas Tareas y Bitácora si no existen."""
     wb = _open_wb()
@@ -70,6 +72,7 @@ def _next_task_id(ws):
     return max_id + 1
 
 
+@escribe_master
 def crear_tarea(descripcion: str, prioridad: str = "Media",
                 responsable: str = "", fecha_limite: str = "") -> dict:
     """Crea una nueva tarea. Retorna dict con ID y datos."""
@@ -116,6 +119,7 @@ def listar_tareas(estado: str = None) -> list[dict]:
     return tareas
 
 
+@escribe_master
 def actualizar_tarea(task_id: int, estado: str = None, observaciones: str = None) -> bool:
     """Actualiza estado y/o observaciones de una tarea."""
     wb = _open_wb()
@@ -139,6 +143,7 @@ def actualizar_tarea(task_id: int, estado: str = None, observaciones: str = None
     return False
 
 
+@escribe_master
 def registrar_bitacora(registro: str, categoria: str = "General") -> bool:
     """Registra una entrada en la bitácora."""
     wb = _open_wb()
