@@ -758,6 +758,8 @@ async def _guardar_excel(query, context, items, file_path):
         first = items[0]
         proveedor = first.get("Nombre Factura / Proveedor") or "Desconocido"
         nro = first.get("Numero Factura / Nro Documento") or "S/N"
+        # /deshacer necesita saber QUÉ se guardó, no solo cuántas filas.
+        context.user_data["last_invoice_id"] = (str(proveedor), str(nro))
         total_factura_anchor = float(first.get("Total Factura") or 0)
         total = (round(total_factura_anchor) if total_factura_anchor > 0
                   else sum(float(i.get("Monto / TOTAL") or 0) for i in items))

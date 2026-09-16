@@ -41,7 +41,7 @@ CLAVES_ESTADO = (
 # Datos que acompanan a cada flujo y que hay que soltar junto con el estado.
 CLAVES_DATOS = (
     "deposito_monto",
-    "pagado_nro",
+    "pagado_nro", "pagado_fecha", "pagado_proveedor", "pagado_proveedores",
     "tarea_desc", "tarea_id_hecho",
     "bitacora_registrado_por", "bitacora_pending",
     "venc_pendientes", "venc_idx",

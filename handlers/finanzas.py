@@ -324,31 +324,63 @@ async def cb_reporte(update, context):
 # ── Callbacks medio pago + calce ────────────────
 
 async def cb_medio_pago(update, context):
-    """Callback para seleccionar medio de pago (Banco/Caja Chica)."""
+    """Callback del flujo /pagado: primero el proveedor (si hace falta), luego el medio."""
     query = update.callback_query
     await query.answer()
+
+    # Cuando el número lo usan varios proveedores, antes del medio viene la
+    # elección de proveedor. Mismo prefijo "pago_", así que entra por acá.
+    if query.data.startswith("pago_prov_"):
+        proveedores = context.user_data.get("pagado_proveedores") or []
+        try:
+            elegido = proveedores[int(query.data.rsplit("_", 1)[1])]
+        except (ValueError, IndexError):
+            await query.edit_message_text(
+                "⚠️ Esa opción ya no está disponible. Empieza de nuevo con /pagado.")
+            return
+        context.user_data["pagado_proveedor"] = elegido
+        context.user_data["pagado_state"] = "esperando_fecha"
+        await query.edit_message_text(
+            f"🏢 *{esc(elegido)}*\n\n"
+            f"📅 Escribe la *fecha de pago* (DD/MM/YYYY o YYYY-MM-DD):",
+            parse_mode="Markdown")
+        return
+
     medio = "Banco" if query.data == "pago_banco" else "Caja Chica"
     nro = context.user_data.get("pagado_nro")
     fecha = context.user_data.get("pagado_fecha")
-    resultado = await asyncio.to_thread(registrar_pago, nro, fecha, medio)
+    proveedor = context.user_data.get("pagado_proveedor")
+    resultado = await asyncio.to_thread(registrar_pago, nro, fecha, medio, proveedor)
     context.user_data["pagado_state"] = None
     context.user_data["pagado_nro"] = None
     context.user_data["pagado_fecha"] = None
+    context.user_data["pagado_proveedor"] = None
+    context.user_data["pagado_proveedores"] = None
 
     actualizadas = resultado.get("actualizadas", 0) if isinstance(resultado, dict) else resultado
     calce = resultado.get("calce") if isinstance(resultado, dict) else None
+    ya_tenian = resultado.get("ya_tenian", 0) if isinstance(resultado, dict) else 0
 
     if actualizadas <= 0:
-        await query.edit_message_text("❌ Error al actualizar el Excel. ¿Está abierto?")
+        if ya_tenian:
+            await query.edit_message_text(
+                f"ℹ️ Esa factura ya tenía fecha de pago en sus {ya_tenian} línea(s). "
+                f"No le cambié nada.")
+        else:
+            await query.edit_message_text("❌ Error al actualizar el Excel. ¿Está abierto?")
         return
 
     icono = "🏦" if medio == "Banco" else "💵"
+    linea_proveedor = f"🏢 {esc(proveedor)}\n" if proveedor else ""
     texto = (
         f"✅ *Pago registrado*\n\n"
         f"📄 Factura Nº {esc(nro)}\n"
+        f"{linea_proveedor}"
         f"📅 Fecha: {fecha}\n"
         f"{icono} Medio: {medio}\n"
         f"📊 {actualizadas} fila(s) actualizada(s)")
+    if ya_tenian:
+        texto += f"\n⚠️ {ya_tenian} línea(s) ya tenían fecha: no las toqué."
 
     if calce:
         if calce["exacto"]:
@@ -456,12 +488,47 @@ async def handle_text_deposito(update, context) -> bool:
     return False
 
 
+def _proveedor_escrito(texto: str, proveedores: list) -> str | None:
+    """El proveedor de la lista que quiso escribir, o None si no se sabe."""
+    from modules.drive.enlaces import _clave_proveedor
+    clave = _clave_proveedor(texto)
+    if not clave:
+        return None
+    for p in proveedores:
+        if _clave_proveedor(p) == clave:
+            return p
+    # Un trozo del nombre vale solo si no deja dudas: "ferreteria" contra dos
+    # ferreterías no se adivina.
+    candidatos = [p for p in proveedores if clave in _clave_proveedor(p)]
+    return candidatos[0] if len(candidatos) == 1 else None
+
+
 async def handle_text_pagado(update, context) -> bool:
-    """Flujo /pagado (nro -> fecha -> medio). Devuelve True si lo manejo."""
+    """Flujo /pagado (nro -> proveedor si hace falta -> fecha -> medio)."""
     pagado_state = context.user_data.get("pagado_state")
     if not pagado_state:
         return False
     texto = update.message.text.strip()
+
+    # Los botones no son la única puerta: un estado que no escucha lo que le
+    # escriben es la misma trampa del `/ cancelar` y del horómetro.
+    if pagado_state == "esperando_proveedor":
+        proveedores = context.user_data.get("pagado_proveedores") or []
+        elegido = _proveedor_escrito(texto, proveedores)
+        if not elegido:
+            await update.message.reply_text(
+                "❌ No reconocí ese proveedor. Toca uno de los botones, o "
+                "escríbelo como aparece:\n\n"
+                + "\n".join(f"• {esc(p)}" for p in proveedores),
+                parse_mode="Markdown")
+            return True
+        context.user_data["pagado_proveedor"] = elegido
+        context.user_data["pagado_state"] = "esperando_fecha"
+        await update.message.reply_text(
+            f"🏢 *{esc(elegido)}*\n\n"
+            f"📅 Escribe la *fecha de pago* (DD/MM/YYYY o YYYY-MM-DD):",
+            parse_mode="Markdown")
+        return True
 
     if pagado_state == "esperando_nro":
         resultados = await asyncio.to_thread(buscar_factura, texto)
@@ -472,6 +539,31 @@ async def handle_text_pagado(update, context) -> bool:
                 parse_mode="Markdown")
             return True
         context.user_data["pagado_nro"] = texto
+
+        # El número solo no identifica una factura: hay 19 números que usan dos
+        # o tres proveedores distintos. Con más de uno, se pregunta ANTES de
+        # escribir; marcar la del otro la saca de la deuda en silencio.
+        proveedores = []
+        for fila in resultados:
+            nombre = str(fila.get("proveedor") or "").strip()
+            if nombre and nombre not in proveedores:
+                proveedores.append(nombre)
+
+        if len(proveedores) > 1:
+            context.user_data["pagado_proveedores"] = proveedores
+            context.user_data["pagado_state"] = "esperando_proveedor"
+            kb = InlineKeyboardMarkup(
+                [[InlineKeyboardButton(p[:60], callback_data=f"pago_prov_{i}")]
+                 for i, p in enumerate(proveedores)])
+            await update.message.reply_text(
+                f"⚠️ *Hay {len(proveedores)} facturas Nº{esc(texto)}*, de proveedores "
+                f"distintos:\n\n"
+                + "\n".join(f"• {esc(p)}" for p in proveedores)
+                + "\n\n¿De cuál es el pago?",
+                parse_mode="Markdown", reply_markup=kb)
+            return True
+
+        context.user_data["pagado_proveedor"] = proveedores[0] if proveedores else None
         context.user_data["pagado_state"] = "esperando_fecha"
         r = resultados[0]
         ya_pagada = (f"\n⚠️ *Ya tiene fecha de pago:* {r['fecha_pago']}"

@@ -276,15 +276,20 @@ async def cmd_cancelar(update, context):
 async def cmd_deshacer(update, context):
     last_file = context.user_data.get("last_invoice_file")
     last_rows = context.user_data.get("last_invoice_rows", 0)
+    # Qué factura era, no solo cuántas filas: si Juan guardó la suya después,
+    # borrar "las últimas" borraría la de Juan.
+    identidad = context.user_data.get("last_invoice_id")
     if not last_file or last_rows <= 0:
         await update.message.reply_text("⚠️ No hay factura reciente para deshacer."); return
     msg = await update.message.reply_text("⏳ Deshaciendo…")
     try:
         fue_boleta = context.user_data.get("last_invoice_boleta", False)
         if fue_boleta:
-            success = await asyncio.to_thread(delete_last_boletas, last_rows)
+            success = await asyncio.to_thread(delete_last_boletas, last_rows,
+                                              identidad=identidad)
         else:
-            success = await asyncio.to_thread(delete_last_rows, last_rows)
+            success = await asyncio.to_thread(delete_last_rows, last_rows,
+                                              identidad=identidad)
     except Exception as e: logger.error(e); success = False
     if success:
         try:
@@ -292,9 +297,17 @@ async def cmd_deshacer(update, context):
         except: pass
         context.user_data["last_invoice_file"] = None
         context.user_data["last_invoice_rows"]  = 0
+        context.user_data["last_invoice_id"]    = None
         await msg.edit_text(f"🗑️ Listo. {last_rows} fila(s) eliminadas del Excel.")
     else:
-        await msg.edit_text("❌ Error al borrar del Excel.")
+        # Negarse es lo correcto cuando lo último ya no es esa factura, así que
+        # el mensaje no puede decir solo "error": el dueño tiene que saber que
+        # su Excel quedó intacto, y por qué.
+        await msg.edit_text(
+            "❌ No borré nada.\n\n"
+            "O lo último que hay en el Excel ya no es esa factura (alguien pudo "
+            "guardar otra después), o el archivo está abierto en Excel. "
+            "Míralo antes de borrar a mano.")
 
 # ── TAREAS Y BITÁCORA ────────────────────────
 from handlers.tareas import (

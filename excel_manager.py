@@ -427,29 +427,67 @@ def buscar_factura(nro_factura: str) -> list:
 
 
 @escribe_master
-def registrar_pago(nro_factura: str, fecha_pago: str, medio: str = "") -> dict:
-    """Actualiza Fecha Pago (col 3) en todas las filas con ese N° factura.
-    medio puede ser 'Banco' o 'Caja Chica'.
-    Si medio es 'Banco', intenta calzar automáticamente con un movimiento bancario.
-    Devuelve dict con {actualizadas, calce}."""
-    resultado = {"actualizadas": 0, "calce": None}
+def registrar_pago(nro_factura: str, fecha_pago: str, medio: str = "",
+                   proveedor: str = None) -> dict:
+    """Marca pagada UNA factura: la del proveedor que se indique.
+
+    El número solo no identifica una factura: hay 19 números que usan dos o
+    tres proveedores distintos (medido, ver modules/drive/enlaces.py). Antes se
+    escribía la fecha en todas las filas con ese número, de quien fuera, y la
+    factura ajena salía de la deuda sin que nadie lo viera. Si el número está
+    repetido y no se dice de quién es, NO se escribe nada y se devuelven los
+    proveedores para preguntar.
+
+    Una fecha de pago que ya estaba tampoco se pisa: se cuenta en `ya_tenian`.
+
+    medio puede ser 'Banco' o 'Caja Chica'. Si es 'Banco', intenta calzar con
+    un movimiento bancario. Devuelve {actualizadas, calce, proveedores, ya_tenian}.
+    """
+    from modules.drive.enlaces import _clave_proveedor
+    resultado = {"actualizadas": 0, "calce": None, "proveedores": [], "ya_tenian": 0}
     try:
         wb = _open_wb()
         ws = wb[SHEET_NAME]
         nro_clean = str(nro_factura).strip()
         valor_pago = f"{fecha_pago} ({medio})" if medio else fecha_pago
+        buscado = _clave_proveedor(proveedor) if proveedor else None
 
-        # Recopilar info de la factura para calce
-        total_factura = 0
-        proveedor_factura = ""
+        filas = []                      # (fila, proveedor, ya_pagada, monto)
         for row_idx in range(2, ws.max_row + 1):
             cell_nro = ws.cell(row=row_idx, column=7).value
-            if cell_nro is not None and str(cell_nro).strip() == nro_clean:
-                ws.cell(row=row_idx, column=3).value = valor_pago
-                resultado["actualizadas"] += 1
-                total_factura += float(ws.cell(row=row_idx, column=15).value or 0)
-                if not proveedor_factura:
-                    proveedor_factura = str(ws.cell(row=row_idx, column=4).value or "")
+            if cell_nro is None or str(cell_nro).strip() != nro_clean:
+                continue
+            nombre = str(ws.cell(row=row_idx, column=4).value or "")
+            ya_pagada = bool(str(ws.cell(row=row_idx, column=3).value or "").strip())
+            filas.append((row_idx, nombre, ya_pagada,
+                          float(ws.cell(row=row_idx, column=15).value or 0)))
+
+        for _fila, nombre, _ya, _monto in filas:
+            if nombre and nombre not in resultado["proveedores"]:
+                resultado["proveedores"].append(nombre)
+
+        if buscado is not None:
+            objetivo = [f for f in filas if _clave_proveedor(f[1]) == buscado]
+        elif len(resultado["proveedores"]) > 1:
+            logger.warning(f"Pago Nº{nro_clean}: ese número lo usan "
+                           f"{len(resultado['proveedores'])} proveedores y no se dijo "
+                           f"cuál. No se escribió nada.")
+            wb.close()
+            return resultado
+        else:
+            objetivo = filas
+
+        total_factura = 0
+        proveedor_factura = ""
+        for row_idx, nombre, ya_pagada, monto in objetivo:
+            if ya_pagada:
+                resultado["ya_tenian"] += 1
+                continue
+            ws.cell(row=row_idx, column=3).value = valor_pago
+            resultado["actualizadas"] += 1
+            total_factura += monto
+            if not proveedor_factura:
+                proveedor_factura = nombre
 
         if resultado["actualizadas"] > 0:
             # Calce automático con banco
@@ -701,21 +739,54 @@ def consultar_saldo_caja() -> dict:
         return {"saldo": 0, "total_ingresos": 0, "total_egresos": 0, "n_gastos": 0, "ultimo_deposito": None}
 
 
+def _ultimas_calzan(ws, n: int, identidad, col_proveedor: int, col_numero: int) -> bool:
+    """Las últimas n filas de la hoja son de esa (proveedor, nº).
+
+    Es la pregunta que /deshacer nunca hacía: borraba "las últimas" y, si
+    alguien había guardado otra cosa después, borraba lo de esa persona.
+    """
+    from modules.drive.enlaces import _clave_proveedor, _normalizar
+    if ws is None or n <= 0 or ws.max_row - 1 < n:
+        return False
+    proveedor, numero = identidad
+    for fila in range(ws.max_row, ws.max_row - n, -1):
+        if _clave_proveedor(ws.cell(fila, col_proveedor).value) != _clave_proveedor(proveedor):
+            return False
+        if _normalizar(ws.cell(fila, col_numero).value) != _normalizar(numero):
+            return False
+    return True
+
+
 @escribe_master
-def delete_last_boletas(n: int) -> bool:
-    """Elimina las últimas n filas de la hoja Boletas y la última de Caja Chica."""
+def delete_last_boletas(n: int, identidad=None) -> bool:
+    """Elimina las últimas n filas de la hoja Boletas y la última de Caja Chica.
+
+    `identidad` es el (proveedor, nº) de la boleta que se guardó. Si las
+    últimas filas ya no son esas, no se borra NADA: ni la boleta ni el gasto
+    de Caja Chica, que es otra fila que antes se borraba fuera lo que fuera.
+    """
     try:
         wb = _open_wb()
+        ws = wb[BOLETAS_SHEET] if BOLETAS_SHEET in wb.sheetnames else None
+        ws_caja = wb[CAJA_CHICA_SHEET] if CAJA_CHICA_SHEET in wb.sheetnames else None
+        if identidad:
+            if not _ultimas_calzan(ws, n, identidad, 2, 6):
+                logger.warning(f"No borré nada: las últimas {n} fila(s) de Boletas "
+                               f"ya no son {identidad}.")
+                wb.close()
+                return False
+            if ws_caja is not None and not _ultimas_calzan(ws_caja, 1, identidad, 4, 5):
+                logger.warning(f"No borré nada: el último gasto de Caja Chica "
+                               f"ya no es {identidad}.")
+                wb.close()
+                return False
         # Borrar de Boletas
-        if BOLETAS_SHEET in wb.sheetnames:
-            ws = wb[BOLETAS_SHEET]
+        if ws is not None:
             for row in range(ws.max_row, max(1, ws.max_row - n), -1):
                 ws.delete_rows(row)
         # Borrar última línea de Caja Chica (el gasto correspondiente)
-        if CAJA_CHICA_SHEET in wb.sheetnames:
-            ws_caja = wb[CAJA_CHICA_SHEET]
-            if ws_caja.max_row > 1:
-                ws_caja.delete_rows(ws_caja.max_row)
+        if ws_caja is not None and ws_caja.max_row > 1:
+            ws_caja.delete_rows(ws_caja.max_row)
         _save_wb(wb)
         logger.info(f"Eliminadas {n} fila(s) de Boletas + 1 de Caja Chica.")
         return True
@@ -725,11 +796,21 @@ def delete_last_boletas(n: int) -> bool:
 
 
 @escribe_master
-def delete_last_rows(n: int) -> bool:
-    """Elimina las últimas n filas de la hoja Facturas."""
+def delete_last_rows(n: int, identidad=None) -> bool:
+    """Elimina las últimas n filas de la hoja Facturas.
+
+    `identidad` es el (proveedor, nº) de la factura que se guardó: si las
+    últimas filas ya no son esas, no se borra nada. Sin eso, /deshacer borraba
+    la factura que otro hubiera guardado después.
+    """
     try:
         wb = _open_wb()
         ws = wb[SHEET_NAME]
+        if identidad and not _ultimas_calzan(ws, n, identidad, 4, 7):
+            logger.warning(f"No borré nada: las últimas {n} fila(s) de Facturas "
+                           f"ya no son {identidad}.")
+            wb.close()
+            return False
         max_row = ws.max_row
         for row in range(max_row, max_row - n, -1):
             ws.delete_rows(row)
