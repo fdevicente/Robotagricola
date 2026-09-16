@@ -1193,8 +1193,17 @@ def api_banco_revisar_update(fila):
 
 if __name__ == "__main__":
     port = int(os.environ.get("DASHBOARD_PORT", 5000))
+    # Sin el depurador de Werkzeug y solo en esta máquina. Con debug=True,
+    # cualquiera que alcanzara el puerto veía el código al fallar algo y podía
+    # ejecutar lo que quisiera desde la consola del depurador; con 0.0.0.0 eso
+    # estaba ofrecido a toda la red. El bot manda el link como localhost, así
+    # que no se pierde nada. Abrirlo a la red es una decisión aparte
+    # (DASHBOARD_HOST=0.0.0.0) y pide un servidor de verdad, no este.
+    host = os.environ.get("DASHBOARD_HOST", "127.0.0.1")
     print(f"\n{'='*50}")
     print(f"  Dashboard Agrícola Santa Elisa")
     print(f"  http://localhost:{port}")
+    if host != "127.0.0.1":
+        print(f"  ⚠️  escuchando en {host}: abierto a la red")
     print(f"{'='*50}\n")
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host=host, port=port, debug=False)
