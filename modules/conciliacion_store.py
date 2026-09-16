@@ -120,18 +120,88 @@ def _actualizar_col_j(ws_banco, ws_conc, fila_banco: int) -> None:
         " + ".join(vinculos) if vinculos else None)
 
 
+def _fecha_mov(ws_banco, fila_banco: int):
+    """La fecha del movimiento del banco."""
+    f = ws_banco.cell(fila_banco, 1).value
+    return f.date() if isinstance(f, datetime) else f
+
+
+def _ya_vinculado(ws_conc, fila_banco: int, nro, proveedor) -> bool:
+    """Ese mismo movimiento ya paga ese mismo documento.
+
+    Vincularlo de nuevo duplicaría lo asignado y dejaría la factura "pagada"
+    con la mitad del dinero.
+    """
+    objetivo = _clave_doc(nro, proveedor)
+    for row in ws_conc.iter_rows(min_row=2, values_only=True):
+        if not row or row[0] is None:
+            continue
+        try:
+            if int(row[2]) != int(fila_banco):
+                continue
+        except (TypeError, ValueError):
+            continue
+        if _clave_doc(row[8], row[9]) == objetivo:
+            return True
+    return False
+
+
+def _asignado_al_doc(ws_conc, nro, proveedor) -> float:
+    """Lo que suman todas las cuotas registradas para ese documento."""
+    objetivo = _clave_doc(nro, proveedor)
+    total = 0.0
+    for row in ws_conc.iter_rows(min_row=2, values_only=True):
+        if not row or row[0] is None or _clave_doc(row[8], row[9]) != objetivo:
+            continue
+        try:
+            total += float(row[10] or 0)
+        except (TypeError, ValueError):
+            continue
+    return total
+
+
+def _total_documento(ws_fact, filas_doc) -> float:
+    """El total de la factura: manda la col 16 y, si no está, suman los ítems."""
+    total_col = suma_items = 0.0
+    for r in filas_doc:
+        try:
+            fila = int(r)
+        except (TypeError, ValueError):
+            continue
+        try:
+            total_col = max(total_col, float(ws_fact.cell(fila, 16).value or 0))
+        except (TypeError, ValueError):
+            pass
+        try:
+            suma_items += float(ws_fact.cell(fila, 15).value or 0)
+        except (TypeError, ValueError):
+            pass
+    return total_col if total_col > 0 else suma_items
+
+
+def _cubre(total: float, asignado: float) -> bool:
+    """Con $1 de tolerancia, igual que estado_documento: es el redondeo del IVA."""
+    return total > 0 and abs(total - asignado) <= 1
+
+
 @escribe_master
-def registrar_vinculos(vinculos: list[dict], usuario: str = "") -> dict:
+def registrar_vinculos(vinculos: list[dict], usuario: str = "",
+                       excel_path: str | None = None) -> dict:
     """Registra una lista de vínculos en UN solo guardado.
 
     Cada vínculo: {fila_banco, tipo_doc, fila_doc, nro_doc, proveedor,
                    monto_asignado, criterio, nota, fecha_pago(optional),
                    filas_doc(list, para completar Fecha Pago en Facturas)}
-    Devuelve {registrados, ids}.
+
+    La Fecha Pago se escribe SOLO cuando lo asignado cubre el total del
+    documento: una cuota no paga la factura, y con la fecha puesta la factura
+    sale de la deuda del dashboard. Un movimiento que ya paga ese documento no
+    se vuelve a vincular. Devuelve {registrados, ids, repetidos, fechas}.
     """
     if not vinculos:
-        return {"registrados": 0, "ids": []}
-    wb = _open()
+        return {"registrados": 0, "ids": [], "repetidos": 0, "fechas": 0}
+    ruta = excel_path or EXCEL_PATH
+    wb = load_workbook(ruta)
     crear_hoja(wb)
     ws_conc = wb[SHEET]
     ws_banco = wb["Cuenta Banco"]
@@ -141,12 +211,18 @@ def registrar_vinculos(vinculos: list[dict], usuario: str = "") -> dict:
     ids = []
     hoy = date.today().isoformat()
     filas_tocadas = set()
+    anotados = []
+    repetidos = 0
 
     for v in vinculos:
         fb = int(v["fila_banco"])
-        fecha_mov = ws_banco.cell(fb, 1).value
-        if isinstance(fecha_mov, datetime):
-            fecha_mov = fecha_mov.date()
+        if _ya_vinculado(ws_conc, fb, v.get("nro_doc"), v.get("proveedor")):
+            repetidos += 1
+            logger.warning("El movimiento de la fila %s ya estaba vinculado a "
+                           "Nº%s %s: no lo repito.", fb, v.get("nro_doc"),
+                           v.get("proveedor"))
+            continue
+        fecha_mov = _fecha_mov(ws_banco, fb)
         desc_mov = str(ws_banco.cell(fb, 2).value or "")[:60]
         monto_mov = _monto_mov(ws_banco, fb)
 
@@ -166,33 +242,93 @@ def registrar_vinculos(vinculos: list[dict], usuario: str = "") -> dict:
         ids.append(nid)
         nid += 1
         filas_tocadas.add(fb)
+        anotados.append(v)
 
-        # Completar Fecha Pago en las líneas de la factura (si vacía)
-        fecha_pago = v.get("fecha_pago") or fecha_mov
-        for r in (v.get("filas_doc") or []):
-            cell = ws_fact.cell(int(r), 3)
+    # La Fecha Pago va SOLO cuando lo asignado cubre el total del documento:
+    # una cuota vincula, pero no paga. Se mira DESPUÉS de anotar todos los
+    # vínculos, para que dos cuotas de la misma tanda cuenten juntas.
+    fechas = 0
+    for v in anotados:
+        filas_doc = [int(r) for r in (v.get("filas_doc") or [])]
+        if not filas_doc:
+            continue
+        total = _total_documento(ws_fact, filas_doc)
+        asignado = _asignado_al_doc(ws_conc, v.get("nro_doc"), v.get("proveedor"))
+        if not _cubre(total, asignado):
+            logger.info("Nº%s %s: asignado %s de %s, sigue debiendo; no pongo "
+                        "fecha de pago.", v.get("nro_doc"), v.get("proveedor"),
+                        round(asignado), round(total))
+            continue
+        fecha_pago = v.get("fecha_pago") or _fecha_mov(ws_banco, int(v["fila_banco"]))
+        escritas = 0
+        for r in filas_doc:
+            cell = ws_fact.cell(r, 3)
             if not (cell.value and str(cell.value).strip()):
                 cell.value = fecha_pago
+                escritas += 1
+        if escritas:
+            fechas += 1
 
     for fb in filas_tocadas:
         _actualizar_col_j(ws_banco, ws_conc, fb)
 
-    _save_wb(wb)
+    _save_wb(wb, ruta)
     wb.close()
-    logger.info(f"Conciliaciones registradas: {len(ids)}")
-    return {"registrados": len(ids), "ids": ids}
+    logger.info(f"Conciliaciones registradas: {len(ids)} · "
+                f"facturas que quedaron pagadas: {fechas}")
+    return {"registrados": len(ids), "ids": ids, "repetidos": repetidos,
+            "fechas": fechas}
+
+
+def _filas_del_documento(ws_fact, nro, proveedor) -> list:
+    """Las filas de Facturas de ese documento (proveedor + número)."""
+    objetivo = _clave_doc(nro, proveedor)
+    return [f for f in range(2, ws_fact.max_row + 1)
+            if _clave_doc(ws_fact.cell(f, 7).value,
+                          ws_fact.cell(f, 4).value) == objetivo]
+
+
+def _mismo_dia(uno, otro) -> bool:
+    """'2026-04-23', datetime(2026,4,23) y date(2026,4,23) son el mismo día."""
+    return bool(uno) and bool(otro) and str(uno).strip()[:10] == str(otro).strip()[:10]
+
+
+def _soltar_fecha_pago(ws_fact, ws_banco, fila_banco, nro, proveedor,
+                       asignado: float) -> int:
+    """Suelta la fecha de pago que había puesto la conciliación.
+
+    Solo si el documento dejó de estar cubierto, y solo la fecha del propio
+    movimiento: la que el dueño escribió a mano lleva otra fecha y no se toca.
+    """
+    filas = _filas_del_documento(ws_fact, nro, proveedor)
+    if not filas or _cubre(_total_documento(ws_fact, filas), asignado):
+        return 0
+    fecha_mov = _fecha_mov(ws_banco, fila_banco) if fila_banco else None
+    soltadas = 0
+    for f in filas:
+        if _mismo_dia(ws_fact.cell(f, 3).value, fecha_mov):
+            ws_fact.cell(f, 3).value = None
+            soltadas += 1
+    return soltadas
 
 
 @escribe_master
-def desconciliar(id_vinculo: int) -> bool:
-    """Elimina un vínculo por ID y actualiza el resumen del movimiento."""
-    wb = _open()
+def desconciliar(id_vinculo: int, excel_path: str | None = None) -> bool:
+    """Elimina un vínculo por ID y actualiza el resumen del movimiento.
+
+    Si con eso el documento deja de estar cubierto, vuelve a deber: se suelta
+    la fecha de pago que había puesto la conciliación. Antes quedaba puesta y
+    la factura desaparecía de la deuda aunque el vínculo ya no existiera.
+    """
+    ruta = excel_path or EXCEL_PATH
+    wb = load_workbook(ruta)
     if SHEET not in wb.sheetnames:
         wb.close()
         return False
     ws_conc = wb[SHEET]
     ws_banco = wb["Cuenta Banco"]
-    fila_borrar, fb = None, None
+    ws_fact = wb["Facturas"] if "Facturas" in wb.sheetnames else None
+    fila_borrar, fb, nro, proveedor = None, None, None, None
     for r in range(2, ws_conc.max_row + 1):
         if ws_conc.cell(r, 1).value == id_vinculo:
             fila_borrar = r
@@ -200,6 +336,8 @@ def desconciliar(id_vinculo: int) -> bool:
                 fb = int(ws_conc.cell(r, 3).value)
             except (TypeError, ValueError):
                 fb = None
+            nro = ws_conc.cell(r, 9).value
+            proveedor = ws_conc.cell(r, 10).value
             break
     if fila_borrar is None:
         wb.close()
@@ -207,9 +345,14 @@ def desconciliar(id_vinculo: int) -> bool:
     ws_conc.delete_rows(fila_borrar)
     if fb:
         _actualizar_col_j(ws_banco, ws_conc, fb)
-    _save_wb(wb)
+    soltadas = 0
+    if ws_fact is not None and nro:
+        soltadas = _soltar_fecha_pago(ws_fact, ws_banco, fb, nro, proveedor,
+                                      _asignado_al_doc(ws_conc, nro, proveedor))
+    _save_wb(wb, ruta)
     wb.close()
-    logger.info(f"Conciliación {id_vinculo} eliminada")
+    logger.info("Conciliación %s eliminada%s", id_vinculo,
+                f" · {soltadas} fecha(s) de pago soltada(s)" if soltadas else "")
     return True
 
 

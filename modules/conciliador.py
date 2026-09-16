@@ -308,8 +308,10 @@ def aplicar_conciliacion(matches: list, usuario: str = "") -> dict:
             "fecha_pago": c.get("fecha"),
         })
     r = registrar_vinculos(vinculos, usuario=usuario)
-    logger.info(f"Conciliación aplicada: {r['registrados']} vínculos")
-    return {"links": r["registrados"], "fechas": r["registrados"]}
+    logger.info(f"Conciliación aplicada: {r['registrados']} vínculos, "
+                f"{r.get('fechas', 0)} factura(s) quedaron pagadas")
+    # Las fechas no son los vínculos: una cuota vincula pero no paga.
+    return {"links": r["registrados"], "fechas": r.get("fechas", 0)}
 
 
 def formato_resumen(res: dict, ia_aceptados: list) -> str:
