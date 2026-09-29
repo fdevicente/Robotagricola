@@ -18,8 +18,15 @@ def _puerto_abierto(host="127.0.0.1", port=5000):
 
 def generar_reporte_pdf(year: int, month: int, output_path: str | None = None,
                          base_url: str = "http://127.0.0.1:5000") -> str:
-    """Genera el PDF del reporte mensual. Devuelve la ruta del archivo."""
+    """Genera el PDF del reporte mensual. Devuelve la ruta del archivo.
+
+    OJO: usa la API *sync* de Playwright, que se niega a correr dentro del loop
+    de asyncio. Desde el bot va con `asyncio.to_thread` (ver
+    handlers/cash_flow_jobs.job_reporte_mensual).
+    """
     from playwright.sync_api import sync_playwright
+
+    from modules.navegador import lanzar_chromium
 
     robot_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     if output_path is None:
@@ -56,7 +63,9 @@ def generar_reporte_pdf(year: int, month: int, output_path: str | None = None,
         if token:
             url += f"?token={token}"
         with sync_playwright() as p:
-            browser = p.chromium.launch()
+            # Si falta el navegador de Playwright, el del sistema sirve igual:
+            # sin esto el reporte se caía donde el banco seguía andando.
+            browser = lanzar_chromium(p, "para el reporte mensual")
             page = browser.new_page()
             page.goto(url, wait_until="networkidle", timeout=30000)
             # Esperar a que el chart se renderice

@@ -1,4 +1,5 @@
 """Jobs programados de cash flow (resumen semanal, etc.)."""
+import asyncio
 import logging
 from datetime import date
 
@@ -62,7 +63,9 @@ async def job_reporte_mensual(context):
 
     try:
         logger.info(f"Generando reporte mensual {y}-{m:02d}...")
-        pdf_path = generar_reporte_pdf(y, m)
+        # La API sync de Playwright se niega a correr dentro del loop de
+        # asyncio: así quedó roto el reporte el 1-jul-2026. Va en un hilo.
+        pdf_path = await asyncio.to_thread(generar_reporte_pdf, y, m)
         mes_nombre = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
                        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"][m]
         with open(pdf_path, "rb") as f:

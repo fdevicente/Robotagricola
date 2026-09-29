@@ -271,9 +271,6 @@ def _navigate_to_cuentas(page):
     return False
 
 
-_LAUNCH_ARGS = ["--no-sandbox", "--disable-blink-features=AutomationControlled"]
-
-
 def _lanzar_chromium(p):
     """Lanza Chromium tolerando instalaciones incompletas de Playwright.
 
@@ -281,30 +278,12 @@ def _lanzar_chromium(p):
     binario falta (típico tras actualizar playwright sin re-instalar navegadores),
     se reintenta con el Chromium completo y, como último recurso, con el Chrome
     del sistema. Así /banco no se cae por un navegador faltante.
+
+    La escalera vive en modules/navegador.py: el reporte mensual en PDF se
+    quedaba sin navegador por lo mismo y ahora usa esta misma.
     """
-    intentos = [
-        ("headless shell (default)", dict(headless=True, args=_LAUNCH_ARGS)),
-        ("chromium completo",        dict(headless=True, args=_LAUNCH_ARGS,
-                                          channel="chromium")),
-        ("chrome del sistema",       dict(headless=True, args=_LAUNCH_ARGS,
-                                          channel="chrome")),
-    ]
-    errores = []
-    for nombre, kwargs in intentos:
-        try:
-            browser = p.chromium.launch(**kwargs)
-            if errores:  # solo avisar si hubo que recurrir a un fallback
-                logger.warning(f"Chromium lanzado con fallback: {nombre}")
-            return browser
-        except Exception as e:
-            errores.append(f"{nombre}: {str(e)[:120]}")
-            logger.warning(f"Launch falló con {nombre}: {str(e)[:150]}")
-    raise RuntimeError(
-        "No pude abrir ningún navegador para conectarme al banco.\n"
-        "Solución: ejecuta en una terminal:\n"
-        "  python -m playwright install chromium\n\n"
-        "Detalle: " + " | ".join(errores)
-    )
+    from modules.navegador import lanzar_chromium
+    return lanzar_chromium(p, "para conectarme al banco")
 
 
 def sync_scotiabank_movements() -> list[dict]:
