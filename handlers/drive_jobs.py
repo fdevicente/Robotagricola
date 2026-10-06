@@ -69,6 +69,10 @@ async def job_drive_cola(context):
     seguido tiene que ser barato, si no serían 144 autenticaciones al día
     para nada.
     """
+    import config
+    if not config.DRIVE_ACTIVO:
+        return                      # apagado: ni se conecta ni avisa
+
     cola = Cola(DRIVE_COLA_PATH, max_intentos=DRIVE_MAX_INTENTOS)
     if not cola.pendientes() and not cola.rendidos():
         return
@@ -155,6 +159,10 @@ async def job_drive_entrada(context):
     import os
     import tempfile
 
+    import config
+    if not config.DRIVE_ACTIVO:
+        return                      # apagado: no hay carpeta que revisar
+
     from config import DRIVE_RAIZ
     from handlers.drive_entrada import carpeta_para, revisar_entrada
     from modules.drive.auth import FaltaAutorizacion
@@ -200,8 +208,22 @@ async def job_drive_entrada(context):
 
 async def cmd_drive(update, context):
     """Muestra cuántas subidas hay pendientes y rendidas, con opción a reintentar."""
+    import config
     cola = Cola(DRIVE_COLA_PATH, max_intentos=DRIVE_MAX_INTENTOS)
     r = await asyncio.to_thread(resumen_cola, cola)
+
+    # Decir "todo al día" con Drive apagado sería mentir: no hay nada al día,
+    # hay documentos esperando en el PC.
+    if not config.DRIVE_ACTIVO:
+        esperando = r["pendientes"] + r["rendidos"]
+        await update.message.reply_text(
+            "🔌 *Drive apagado*\n\n"
+            "Los documentos se guardan solo en el PC.\n"
+            + (f"Quedan *{esperando}* esperando para cuando se encienda.\n"
+               if esperando else "")
+            + "\nPara encenderlo: `DRIVE_ACTIVO=1` en el .env y reiniciar el bot.",
+            parse_mode="Markdown")
+        return
 
     if not r["pendientes"] and not r["rendidos"]:
         await update.message.reply_text(

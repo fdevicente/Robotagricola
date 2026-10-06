@@ -16,6 +16,14 @@ from infrastructure.backups import backup_master
 from modules.drive.cola import Cola
 
 
+@pytest.fixture(autouse=True)
+def _drive_encendido(monkeypatch):
+    """Lo que se prueba acá es DÓNDE encola, así que Drive tiene que estar
+    encendido: desde el 6-oct-2026 está apagado por defecto."""
+    import config
+    monkeypatch.setattr(config, "DRIVE_ACTIVO", True, raising=False)
+
+
 @pytest.fixture
 def master_falso(tmp_path):
     ruta = tmp_path / "master.xlsx"

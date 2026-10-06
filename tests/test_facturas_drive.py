@@ -6,6 +6,14 @@ from modules.drive.cola import Cola
 from handlers.facturas import encolar_documento
 
 
+@pytest.fixture(autouse=True)
+def _drive_encendido(monkeypatch):
+    """Esto prueba el camino a Drive, y Drive está APAGADO por defecto desde el
+    6-oct-2026 (ver tests/test_drive_apagado.py). Para probarlo, se enciende."""
+    import config
+    monkeypatch.setattr(config, "DRIVE_ACTIVO", True, raising=False)
+
+
 def test_encola_en_la_carpeta_del_anio(tmp_path):
     doc = tmp_path / "COPEVAL_123.pdf"
     doc.write_text("x", encoding="utf-8")

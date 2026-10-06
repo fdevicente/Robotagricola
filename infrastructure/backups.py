@@ -45,10 +45,12 @@ def backup_master(reason: str, excel_path=None, backup_base=None,
     _copiar_verificado(snap_path, os.path.join(master_dir, "current.xlsx"))
 
     try:
-        from config import DRIVE_COLA_PATH, DRIVE_MAX_INTENTOS
-        from modules.drive.cola import Cola
-        Cola(cola_path or DRIVE_COLA_PATH, DRIVE_MAX_INTENTOS).encolar(
-            snap_path, "Respaldos/Master", os.path.basename(snap_path))
+        import config
+        if config.DRIVE_ACTIVO:          # apagado: el respaldo se queda en Dropbox
+            from config import DRIVE_COLA_PATH, DRIVE_MAX_INTENTOS
+            from modules.drive.cola import Cola
+            Cola(cola_path or DRIVE_COLA_PATH, DRIVE_MAX_INTENTOS).encolar(
+                snap_path, "Respaldos/Master", os.path.basename(snap_path))
     except Exception as e:
         logger.warning("No pude encolar el respaldo para Drive: %s", e)
 

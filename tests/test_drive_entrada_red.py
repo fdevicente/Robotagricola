@@ -33,6 +33,14 @@ class _Ctx:
         self.enviados.append(text)
 
 
+@pytest.fixture(autouse=True)
+def _drive_encendido(monkeypatch):
+    """El job solo mira la carpeta si Drive está encendido, y desde el
+    6-oct-2026 está apagado por defecto. Acá se prueba qué hace cuando corre."""
+    import config
+    monkeypatch.setattr(config, "DRIVE_ACTIVO", True, raising=False)
+
+
 @pytest.fixture
 def sin_drive_real(monkeypatch):
     """Evita tocar la red: el cliente y la raíz son de mentira."""

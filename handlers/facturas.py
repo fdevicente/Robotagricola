@@ -107,9 +107,16 @@ def encolar_documento(file_path: str, fecha_emision=None, cola=None,
 
     El archivo ya está guardado en disco cuando esto corre: si encolar falla,
     se pierde el enlace, no el documento.
+
+    Con Drive apagado (config.DRIVE_ACTIVO) no se encola nada: el documento se
+    queda en el PC, que es donde ya estaba.
     """
     import os
     from datetime import date
+
+    import config
+    if not config.DRIVE_ACTIVO:
+        return
     try:
         if cola is None:
             from config import DRIVE_COLA_PATH, DRIVE_MAX_INTENTOS

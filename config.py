@@ -87,6 +87,14 @@ DRIVE_COLA_PATH = os.getenv("DRIVE_COLA_PATH",
 DRIVE_MAX_INTENTOS = int(os.getenv("DRIVE_MAX_INTENTOS", "5"))
 # Avisar cuando el Drive pase de este porcentaje de uso
 DRIVE_UMBRAL_AVISO = float(os.getenv("DRIVE_UMBRAL_AVISO", "0.80"))
+# ¿Se sube a Drive? APAGADO el 6-oct-2026 por pedido del dueño: la red con
+# Drive daba "The read operation timed out" en todo (subir, revisar _Entrada,
+# leer la cuota) y el bot avisaba del MISMO fallo cada 10 minutos. Apagado, los
+# documentos se siguen guardando en el PC y los respaldos del Master en
+# Dropbox. Se enciende con DRIVE_ACTIVO=1 en el .env: lo que quedó en la cola
+# sube solo en la siguiente pasada, no se perdió nada.
+DRIVE_ACTIVO = os.getenv("DRIVE_ACTIVO", "0").strip().lower() in (
+    "1", "true", "si", "sí", "on")
 
 # Lock del Master: un solo escritor a la vez entre el bot, el dashboard y los
 # scripts (ver infrastructure/escritura_master.py). Carpeta propia y no la del
